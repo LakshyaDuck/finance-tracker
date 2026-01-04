@@ -1,0 +1,315 @@
+{% extends "layout.html" %}
+
+{% block title %}Analytics{% endblock %}
+{% block nav_title %}Analytics{% endblock %}
+
+{% block main %}
+<div class="analytics-container" style="max-width: 1400px; margin: 2rem auto; padding: 0 1rem;">
+    <h1 style="margin-bottom: 2rem;">Financial Analytics</h1>
+
+    <!-- Charts Grid -->
+    <div class="charts-grid">
+        <!-- Income vs Expense Chart -->
+        <div class="chart-card">
+            <h2 class="chart-title">Income vs Expense (Last 12 Months)</h2>
+            <canvas id="incomeExpenseChart"></canvas>
+        </div>
+
+        <!-- Budget vs Actual Chart -->
+        <div class="chart-card">
+            <h2 class="chart-title">Budget vs Actual Spending (This Month)</h2>
+            <canvas id="budgetActualChart"></canvas>
+        </div>
+
+        <!-- Account Balances Chart -->
+        <div class="chart-card">
+            <h2 class="chart-title">Account Balances</h2>
+            <canvas id="accountBalancesChart"></canvas>
+        </div>
+
+        <!-- Income Sources Chart -->
+        <div class="chart-card">
+            <h2 class="chart-title">Income Sources (Last 12 Months)</h2>
+            <canvas id="incomeSourcesChart"></canvas>
+        </div>
+
+        <!-- Expense Breakdown Chart -->
+        <div class="chart-card">
+            <h2 class="chart-title">Expense Breakdown (Last 12 Months)</h2>
+            <canvas id="expenseBreakdownChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<style>
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+    gap: 2rem;
+    margin-bottom: 3rem;
+}
+
+.chart-card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 4px var(--shadow);
+}
+
+.chart-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    color: var(--text-primary);
+}
+
+@media (max-width: 768px) {
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+// Prepare data from Flask
+const monthlyData = {{ monthly_data | tojson }};
+const budgetData = {{ budget_data | tojson }};
+const accountBalances = {{ account_balances | tojson }};
+const incomeSources = {{ income_sources | tojson }};
+const expenseBreakdown = {{ expense_breakdown | tojson }};
+
+// Chart color schemes
+const colors = {
+    income: '#10b981',
+    expense: '#ef4444',
+    budget: '#3b82f6',
+    actual: '#f59e0b',
+    primary: '#a855f7',
+    secondary: '#06b6d4'
+};
+
+// 1. Income vs Expense Chart
+const incomeExpenseCtx = document.getElementById('incomeExpenseChart').getContext('2d');
+new Chart(incomeExpenseCtx, {
+    type: 'bar',
+    data: {
+        labels: monthlyData.map(d => d.month),
+        datasets: [
+            {
+                label: 'Income',
+                data: monthlyData.map(d => d.income),
+                backgroundColor: colors.income,
+                borderRadius: 6
+            },
+            {
+                label: 'Expense',
+                data: monthlyData.map(d => d.expense),
+                backgroundColor: colors.expense,
+                borderRadius: 6
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top'
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value) {
+                        return '$' + value.toLocaleString();
+                    }
+                }
+            }
+        }
+    }
+});
+
+// 2. Budget vs Actual Chart
+if (budgetData.length > 0) {
+    const budgetActualCtx = document.getElementById('budgetActualChart').getContext('2d');
+    new Chart(budgetActualCtx, {
+        type: 'bar',
+        data: {
+            labels: budgetData.map(d => d.category),
+            datasets: [
+                {
+                    label: 'Budget',
+                    data: budgetData.map(d => d.budget),
+                    backgroundColor: colors.budget,
+                    borderRadius: 6
+                },
+                {
+                    label: 'Actual',
+                    data: budgetData.map(d => d.actual),
+                    backgroundColor: colors.actual,
+                    borderRadius: 6
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
+    });
+} else {
+    document.getElementById('budgetActualChart').parentElement.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 3rem;">No budgets set for this month</p>';
+}
+
+// 3. Account Balances Chart
+const accountBalancesCtx = document.getElementById('accountBalancesChart').getContext('2d');
+new Chart(accountBalancesCtx, {
+    type: 'doughnut',
+    data: {
+        labels: accountBalances.map(a => a.name),
+        datasets: [{
+            data: accountBalances.map(a => a.balance),
+            backgroundColor: [
+                '#10b981',
+                '#3b82f6',
+                '#f59e0b',
+                '#ef4444',
+                '#a855f7',
+                '#06b6d4',
+                '#ec4899',
+                '#84cc16'
+            ],
+            borderWidth: 2,
+            borderColor: 'var(--bg-secondary)'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                position: 'right'
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return context.label + ': $' + context.parsed.toLocaleString();
+                    }
+                }
+            }
+        }
+    }
+});
+
+// 4. Income Sources Chart
+if (incomeSources.length > 0) {
+    const incomeSourcesCtx = document.getElementById('incomeSourcesChart').getContext('2d');
+    new Chart(incomeSourcesCtx, {
+        type: 'pie',
+        data: {
+            labels: incomeSources.map(s => s.category),
+            datasets: [{
+                data: incomeSources.map(s => s.total),
+                backgroundColor: [
+                    '#10b981',
+                    '#3b82f6',
+                    '#f59e0b',
+                    '#a855f7',
+                    '#06b6d4',
+                    '#ec4899',
+                    '#84cc16',
+                    '#f97316'
+                ],
+                borderWidth: 2,
+                borderColor: 'var(--bg-secondary)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'right'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': $' + context.parsed.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
+    });
+} else {
+    document.getElementById('incomeSourcesChart').parentElement.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 3rem;">No income data available</p>';
+}
+
+// 5. Expense Breakdown Chart
+if (expenseBreakdown.length > 0) {
+    const expenseBreakdownCtx = document.getElementById('expenseBreakdownChart').getContext('2d');
+    new Chart(expenseBreakdownCtx, {
+        type: 'doughnut',
+        data: {
+            labels: expenseBreakdown.map(e => e.category),
+            datasets: [{
+                data: expenseBreakdown.map(e => e.total),
+                backgroundColor: [
+                    '#ef4444',
+                    '#f59e0b',
+                    '#f97316',
+                    '#ec4899',
+                    '#a855f7',
+                    '#8b5cf6',
+                    '#6366f1',
+                    '#3b82f6',
+                    '#06b6d4',
+                    '#14b8a6'
+                ],
+                borderWidth: 2,
+                borderColor: 'var(--bg-secondary)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'right'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': $' + context.parsed.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
+    });
+} else {
+    document.getElementById('expenseBreakdownChart').parentElement.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 3rem;">No expense data available</p>';
+}
+</script>
+{% endblock %}

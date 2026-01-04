@@ -1,0 +1,213 @@
+{% extends "layout.html" %}
+
+{% block title %}Add Transaction{% endblock %}
+{% block nav_title %}Add Transaction{% endblock %}
+
+{% block main %}
+<div class="center-container">
+    <div class="card" style="max-width: 600px; width: 100%;">
+        <h1 class="card-title" style="font-size: 1.75rem; margin-bottom: 1.5rem;">Add New Transaction</h1>
+
+        <form action="/add_transaction" method="post" id="transactionForm">
+            <!-- Transaction Type -->
+            <div class="form-group">
+                <label class="form-label" for="type">Transaction Type</label>
+                <select class="form-control" name="type" id="type" required onchange="toggleFields()">
+                    <option value="" disabled selected>Select type</option>
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                    <option value="personal">Personal (Lent/Borrowed)</option>
+                    <option value="transfer">Transfer Between Accounts</option>
+                </select>
+            </div>
+
+            <!-- Account (for income/expense/personal only) -->
+            <div class="form-group" id="accountGroup" style="display: none;">
+                <label class="form-label" for="account">Account</label>
+                <select class="form-control" name="account_id" id="account">
+                    <option value="" disabled selected>Select account</option>
+                    {% for account in accounts %}
+                    <option value="{{ account.id }}">{{ account.name }} ({{ account.type }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- From Account (for transfer only) -->
+            <div class="form-group" id="fromAccountGroup" style="display: none;">
+                <label class="form-label" for="from_account">From Account</label>
+                <select class="form-control" name="from_account_id" id="from_account" onchange="updateToAccountOptions()">
+                    <option value="" disabled selected>Select account</option>
+                    {% for account in accounts %}
+                    <option value="{{ account.id }}" data-name="{{ account.name }}" data-type="{{ account.type }}">
+                        {{ account.name }} ({{ account.type }}) - {{ account.balance|usd }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- To Account (for transfer only) -->
+            <div class="form-group" id="toAccountGroup" style="display: none;">
+                <label class="form-label" for="to_account">To Account</label>
+                <select class="form-control" name="to_account_id" id="to_account">
+                    <option value="" disabled selected>Select account</option>
+                    {% for account in accounts %}
+                    <option value="{{ account.id }}" data-name="{{ account.name }}" data-type="{{ account.type }}">
+                        {{ account.name }} ({{ account.type }}) - {{ account.balance|usd }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Category (for income/expense only) -->
+            <div class="form-group" id="categoryGroup" style="display: none;">
+                <label class="form-label" for="category">Category</label>
+                <select class="form-control" name="category" id="category">
+                    <option value="" disabled selected>Select category</option>
+                    <optgroup label="Income Categories" id="incomeCategories" style="display: none;">
+                        {% for cat in income_categories %}
+                        <option value="{{ cat.name }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </optgroup>
+                    <optgroup label="Expense Categories" id="expenseCategories" style="display: none;">
+                        {% for cat in expense_categories %}
+                        <option value="{{ cat.name }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </optgroup>
+                </select>
+            </div>
+
+            <!-- Person Name (for personal only) -->
+            <div class="form-group" id="personGroup" style="display: none;">
+                <label class="form-label" for="person_name">Person Name</label>
+                <input class="form-control" type="text" name="person_name" id="person_name" placeholder="Enter person's name">
+            </div>
+
+            <!-- Direction (for personal only) -->
+            <div class="form-group" id="directionGroup" style="display: none;">
+                <label class="form-label" for="direction">Direction</label>
+                <select class="form-control" name="direction" id="direction">
+                    <option value="" disabled selected>Select direction</option>
+                    <option value="lent">Lent (You gave money)</option>
+                    <option value="borrowed">Borrowed (You received money)</option>
+                </select>
+            </div>
+
+            <!-- Amount -->
+            <div class="form-group">
+                <label class="form-label" for="amount">Amount</label>
+                <input class="form-control" type="number" name="amount" id="amount" step="0.01" min="0.01" placeholder="0.00" required>
+            </div>
+
+            <!-- Date -->
+            <div class="form-group">
+                <label class="form-label" for="date">Date</label>
+                <input class="form-control" type="date" name="date" id="date" required>
+            </div>
+
+            <!-- Description -->
+            <div class="form-group">
+                <label class="form-label" for="description">Description (Optional)</label>
+                <textarea class="form-control" name="description" id="description" rows="3" placeholder="Add a note about this transaction"></textarea>
+            </div>
+
+            <!-- Buttons -->
+            <div style="display: flex; gap: 1rem;">
+                <button type="submit" class="btn btn-primary" style="flex: 1;">Add Transaction</button>
+                <a href="/transactions" class="btn btn-secondary" style="flex: 1; text-align: center; text-decoration: none;">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Set today's date as default
+    document.getElementById('date').valueAsDate = new Date();
+
+    function toggleFields() {
+        const type = document.getElementById('type').value;
+        const accountGroup = document.getElementById('accountGroup');
+        const fromAccountGroup = document.getElementById('fromAccountGroup');
+        const toAccountGroup = document.getElementById('toAccountGroup');
+        const categoryGroup = document.getElementById('categoryGroup');
+        const categorySelect = document.getElementById('category');
+        const accountSelect = document.getElementById('account');
+        const fromAccountSelect = document.getElementById('from_account');
+        const toAccountSelect = document.getElementById('to_account');
+        const personGroup = document.getElementById('personGroup');
+        const personInput = document.getElementById('person_name');
+        const directionGroup = document.getElementById('directionGroup');
+        const directionSelect = document.getElementById('direction');
+        const incomeCategories = document.getElementById('incomeCategories');
+        const expenseCategories = document.getElementById('expenseCategories');
+
+        // Reset all fields
+        accountGroup.style.display = 'none';
+        fromAccountGroup.style.display = 'none';
+        toAccountGroup.style.display = 'none';
+        categoryGroup.style.display = 'none';
+        personGroup.style.display = 'none';
+        directionGroup.style.display = 'none';
+        accountSelect.removeAttribute('required');
+        fromAccountSelect.removeAttribute('required');
+        toAccountSelect.removeAttribute('required');
+        categorySelect.removeAttribute('required');
+        personInput.removeAttribute('required');
+        directionSelect.removeAttribute('required');
+        incomeCategories.style.display = 'none';
+        expenseCategories.style.display = 'none';
+
+        if (type === 'income') {
+            accountGroup.style.display = 'block';
+            categoryGroup.style.display = 'block';
+            accountSelect.setAttribute('required', 'required');
+            categorySelect.setAttribute('required', 'required');
+            incomeCategories.style.display = 'block';
+        } else if (type === 'expense') {
+            accountGroup.style.display = 'block';
+            categoryGroup.style.display = 'block';
+            accountSelect.setAttribute('required', 'required');
+            categorySelect.setAttribute('required', 'required');
+            expenseCategories.style.display = 'block';
+        } else if (type === 'personal') {
+            accountGroup.style.display = 'block';
+            personGroup.style.display = 'block';
+            directionGroup.style.display = 'block';
+            accountSelect.setAttribute('required', 'required');
+            personInput.setAttribute('required', 'required');
+            directionSelect.setAttribute('required', 'required');
+        } else if (type === 'transfer') {
+            fromAccountGroup.style.display = 'block';
+            toAccountGroup.style.display = 'block';
+            fromAccountSelect.setAttribute('required', 'required');
+            toAccountSelect.setAttribute('required', 'required');
+        }
+    }
+
+    function updateToAccountOptions() {
+        const fromAccountId = document.getElementById('from_account').value;
+        const toAccountSelect = document.getElementById('to_account');
+        const options = toAccountSelect.getElementsByTagName('option');
+
+        // Re-enable all options first
+        for (let i = 0; i < options.length; i++) {
+            options[i].disabled = false;
+            options[i].style.display = 'block';
+        }
+
+        // Disable the selected from_account in to_account dropdown
+        if (fromAccountId) {
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].value === fromAccountId) {
+                    options[i].disabled = true;
+                    options[i].style.display = 'none';
+                }
+            }
+        }
+
+        // Reset to_account selection if it matches from_account
+        if (toAccountSelect.value === fromAccountId) {
+            toAccountSelect.value = '';
+        }
+    }
+</script>
+{% endblock %}

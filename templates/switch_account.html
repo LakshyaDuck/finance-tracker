@@ -1,0 +1,18 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Switch Account
+{% endblock %}
+
+{% block main %}
+    <div class="nav-menu">
+        {% for account in accounts %}
+        <tr>
+                <td>{{ account.name }}</td>
+                <td>
+                    {{ account.type }}
+                </td>
+        </tr>
+
+    </div>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "layout.html" %}
+
+{% block title %}Budgets{% endblock %}
+{% block nav_title %}Budgets{% endblock %}
+
+{% block main %}
+<div style="margin-bottom: 2rem;">
+    <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem;">Monthly Budgets</h1>
+    <p style="color: var(--text-secondary);">{{ current_month }}</p>
+</div>
+
+<div style="display: grid; gap: 1.5rem;">
+    {% for category in categories %}
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="font-size: 1.25rem; font-weight: 600; margin: 0;">{{ category.name }}</h3>
+
+            {% set budget_limit = budgets.get(category.id, 0) %}
+            {% set spent_amount = spent.get(category.id, 0) %}
+
+            {% if budget_limit > 0 %}
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">
+                    {{ spent_amount }} / {{ budget_limit }}
+                </span>
+            {% else %}
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">No budget set</span>
+            {% endif %}
+        </div>
+
+        <!-- Progress Bar -->
+        {% if budget_limit > 0 %}
+        <div style="background-color: var(--bg-primary); height: 12px; border-radius: 6px; overflow: hidden; margin-bottom: 1rem;">
+            {% set percentage = (spent_amount / budget_limit * 100) | round %}
+            {% if percentage > 100 %}
+                {% set percentage = 100 %}
+            {% endif %}
+
+            {% if percentage >= 90 %}
+                {% set bar_color = '#ef4444' %}
+            {% elif percentage >= 70 %}
+                {% set bar_color = '#f59e0b' %}
+            {% else %}
+                {% set bar_color = 'var(--accent)' %}
+            {% endif %}
+
+            <div style="background-color: {{ bar_color }}; height: 100%; width: {{ percentage }}%; transition: width 0.3s;"></div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; margin-bottom: 1rem;">
+            <span style="color: var(--text-secondary);">
+                {% if spent_amount > budget_limit %}
+                    <span style="color: #ef4444; font-weight: 600;">Over budget by {{ spent_amount - budget_limit }}</span>
+                {% elif spent_amount >= budget_limit * 0.9 %}
+                    <span style="color: #f59e0b; font-weight: 600;">{{ ((budget_limit - spent_amount) | round(2)) }} remaining</span>
+                {% else %}
+                    {{ ((budget_limit - spent_amount) | round(2)) }} remaining
+                {% endif %}
+            </span>
+            <span style="color: var(--text-secondary);">{{ percentage }}% used</span>
+        </div>
+        {% endif %}
+
+        <!-- Set/Update Budget Form -->
+        <form action="/budgets" method="post" style="display: flex; gap: 0.5rem;">
+            <input type="hidden" name="category_id" value="{{ category.id }}">
+            <input class="form-control" type="number" name="monthly_limit" step="0.01" min="0.01"
+                   placeholder="Set budget amount" value="{{ budget_limit if budget_limit > 0 else '' }}"
+                   style="flex: 1;" required>
+            <button type="submit" class="btn btn-primary" style="padding: 0.75rem 1.5rem;">
+                {% if budget_limit > 0 %}Update{% else %}Set{% endif %}
+            </button>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+
+{% if categories|length == 0 %}
+<div class="card text-center" style="padding: 3rem;">
+    <p style="color: var(--text-secondary); font-size: 1.1rem;">No expense categories available</p>
+</div>
+{% endif %}
+{% endblock %}

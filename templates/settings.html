@@ -1,0 +1,469 @@
+{% extends "layout.html" %}
+
+{% block title %}Settings{% endblock %}
+{% block nav_title %}Settings{% endblock %}
+
+{% block main %}
+<div class="settings-container" style="max-width: 900px; margin: 2rem auto; padding: 0 1rem;">
+    <h1 style="margin-bottom: 2rem;">Settings</h1>
+
+    <!-- Account Switching Section -->
+    <div class="settings-section">
+        <h2 class="section-title">Active Account</h2>
+        <form action="/switch_account" method="post" id="switchAccountForm">
+            <div class="form-group">
+                <label class="form-label" for="account">Switch Account</label>
+                <select class="form-control" name="account_id" id="account" onchange="document.getElementById('switchAccountForm').submit()">
+                    {% for account in accounts %}
+                    <option value="{{ account.id }}" {% if account.id == current_account_id %}selected{% endif %}>
+                        {{ account.name }} ({{ account.type }}) - {{ account.balance|usd }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="form-hint">Currently using: <strong>{{ current_account.name }}</strong></p>
+            </div>
+        </form>
+    </div>
+
+    <!-- Account Management Section -->
+    <div class="settings-section">
+        <h2 class="section-title">Account Management</h2>
+
+        <!-- Create New Account -->
+        <div class="setting-item">
+            <div class="setting-info">
+                <h3>Create New Account</h3>
+                <p>Add a new account (Savings, Business, etc.)</p>
+            </div>
+            <button class="btn btn-primary" onclick="toggleModal('createAccountModal')">Create Account</button>
+        </div>
+
+        <!-- Manage Accounts -->
+        <div class="setting-item">
+            <div class="setting-info">
+                <h3>Manage Accounts</h3>
+                <p>Rename or delete your accounts</p>
+            </div>
+            <button class="btn btn-secondary" onclick="toggleModal('manageAccountsModal')">Manage</button>
+        </div>
+    </div>
+
+    <!-- Security Section -->
+    <div class="settings-section">
+        <h2 class="section-title">Security</h2>
+
+        <div class="setting-item">
+            <div class="setting-info">
+                <h3>Change Password</h3>
+                <p>Update your account password</p>
+            </div>
+            <button class="btn btn-secondary" onclick="toggleModal('changePasswordModal')">Change</button>
+        </div>
+    </div>
+
+    <!-- Preferences Section -->
+    <div class="settings-section">
+        <h2 class="section-title">Preferences</h2>
+
+        <!-- Currency -->
+        <div class="setting-item">
+            <div class="setting-info">
+                <h3>Currency</h3>
+                <p>Current: <strong>{{ user_currency }}</strong></p>
+            </div>
+            <button class="btn btn-secondary" onclick="toggleModal('changeCurrencyModal')">Change</button>
+        </div>
+
+        <!-- Theme -->
+        <div class="setting-item">
+            <div class="setting-info">
+                <h3>Theme</h3>
+                <p>Switch between light and dark mode</p>
+            </div>
+            <button class="btn btn-secondary" id="themeToggleBtn" onclick="toggleTheme()">Toggle Theme</button>
+        </div>
+    </div>
+
+    <!-- Categories Section -->
+    <div class="settings-section">
+        <h2 class="section-title">Categories</h2>
+
+        <div class="setting-item">
+            <div class="setting-info">
+                <h3>Manage Categories</h3>
+                <p>Add or remove custom categories</p>
+            </div>
+            <button class="btn btn-secondary" onclick="toggleModal('manageCategoriesModal')">Manage</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+
+<!-- Create Account Modal -->
+<div id="createAccountModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Create New Account</h2>
+            <span class="close" onclick="toggleModal('createAccountModal')">&times;</span>
+        </div>
+        <form action="/create_account" method="post">
+            <div class="form-group">
+                <label class="form-label" for="account_name">Account Name</label>
+                <input class="form-control" type="text" name="account_name" id="account_name" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="account_type">Account Type</label>
+                <select class="form-control" name="account_type" id="account_type" required>
+                    <option value="current">Current</option>
+                    <option value="savings">Savings</option>
+                    <option value="safe">Safe</option>
+                    <option value="business">Business</option>
+                    <option value="investment">Investment</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="initial_balance">Initial Balance</label>
+                <input class="form-control" type="number" step="0.01" name="initial_balance" id="initial_balance" value="0" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">Create</button>
+        </form>
+    </div>
+</div>
+
+<!-- Manage Accounts Modal -->
+<div id="manageAccountsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Manage Accounts</h2>
+            <span class="close" onclick="toggleModal('manageAccountsModal')">&times;</span>
+        </div>
+        <div class="accounts-list">
+            {% for account in accounts %}
+            <div class="account-item">
+                <div>
+                    <strong>{{ account.name }}</strong>
+                    <span style="color: var(--text-secondary); text-transform: capitalize;">({{ account.type }})</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-sm btn-secondary" onclick="renameAccount({{ account.id }}, '{{ account.name }}')">Rename</button>
+                    {% if accounts|length > 1 and account.id != current_account_id %}
+                    <form action="/delete_account" method="post" style="display: inline;" onsubmit="return confirm('Are you sure? All transactions will be deleted.')">
+                        <input type="hidden" name="account_id" value="{{ account.id }}">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Rename Account Modal -->
+<div id="renameAccountModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Rename Account</h2>
+            <span class="close" onclick="toggleModal('renameAccountModal')">&times;</span>
+        </div>
+        <form action="/rename_account" method="post">
+            <input type="hidden" name="account_id" id="rename_account_id">
+            <div class="form-group">
+                <label class="form-label" for="new_account_name">New Account Name</label>
+                <input class="form-control" type="text" name="new_account_name" id="new_account_name" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">Rename</button>
+        </form>
+    </div>
+</div>
+
+<!-- Change Password Modal -->
+<div id="changePasswordModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Change Password</h2>
+            <span class="close" onclick="toggleModal('changePasswordModal')">&times;</span>
+        </div>
+        <form action="/change_password" method="post">
+            <div class="form-group">
+                <label class="form-label" for="current_password">Current Password</label>
+                <input class="form-control" type="password" name="current_password" id="current_password" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="new_password">New Password</label>
+                <input class="form-control" type="password" name="new_password" id="new_password" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="confirm_password">Confirm New Password</label>
+                <input class="form-control" type="password" name="confirm_password" id="confirm_password" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">Update Password</button>
+        </form>
+    </div>
+</div>
+
+<!-- Change Currency Modal -->
+<div id="changeCurrencyModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Change Currency</h2>
+            <span class="close" onclick="toggleModal('changeCurrencyModal')">&times;</span>
+        </div>
+        <form action="/change_currency" method="post">
+            <div class="form-group">
+                <label class="form-label" for="currency">Select Currency</label>
+                <select class="form-control" name="currency" id="currency" required>
+                    <option value="USD" {% if user_currency == 'USD' %}selected{% endif %}>USD ($)</option>
+                    <option value="EUR" {% if user_currency == 'EUR' %}selected{% endif %}>EUR (€)</option>
+                    <option value="GBP" {% if user_currency == 'GBP' %}selected{% endif %}>GBP (£)</option>
+                    <option value="INR" {% if user_currency == 'INR' %}selected{% endif %}>INR (₹)</option>
+                    <option value="JPY" {% if user_currency == 'JPY' %}selected{% endif %}>JPY (¥)</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">Update Currency</button>
+        </form>
+    </div>
+</div>
+
+
+
+<!-- Manage Categories Modal -->
+<div id="manageCategoriesModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Manage Categories</h2>
+            <span class="close" onclick="toggleModal('manageCategoriesModal')">&times;</span>
+        </div>
+        <p style="margin-bottom: 1rem; color: var(--text-secondary); padding: 0 1.5rem;">Custom categories only (preset categories cannot be deleted)</p>
+        <div class="categories-list">
+            {% for category in user_categories %}
+            <div class="category-item">
+                <div>
+                    <strong>{{ category.name }}</strong>
+                    <span style="color: var(--text-secondary);">({{ category.type }})</span>
+                </div>
+                <form action="/delete_category" method="post" style="display: inline;" onsubmit="return confirm('Delete this category?')">
+                    <input type="hidden" name="category_id" value="{{ category.id }}">
+                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        <div style="padding: 1.5rem;">
+            <hr style="margin: 1.5rem 0;">
+            <h3 style="margin-bottom: 1rem;">Add New Category</h3>
+            <form action="/create_category" method="post">
+                <div class="form-group">
+                    <label class="form-label" for="category_name">Category Name</label>
+                    <input class="form-control" type="text" name="category_name" id="category_name" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="category_type">Type</label>
+                    <select class="form-control" name="category_type" id="category_type" required>
+                        <option value="income">Income</option>
+                        <option value="expense">Expense</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Add Category</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.settings-container {
+    padding-bottom: 3rem;
+}
+
+.settings-section {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.section-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--border);
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.setting-item:last-child {
+    border-bottom: none;
+}
+
+.setting-info h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.setting-info p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.form-hint {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: var(--bg-secondary);
+    margin: 5% auto;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+    font-size: 1.25rem;
+    margin: 0;
+}
+
+.close {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--text-secondary);
+    cursor: pointer;
+    line-height: 1;
+}
+
+.close:hover {
+    color: var(--text-primary);
+}
+
+.modal-content form,
+.modal-content .accounts-list,
+.modal-content .categories-list {
+    padding: 1.5rem;
+}
+
+.account-item, .category-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background-color: var(--bg-primary);
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+}
+
+.btn-sm {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.btn-danger {
+    background-color: #ef4444;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #dc2626;
+}
+
+.btn-full {
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .setting-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+}
+</style>
+
+<script>
+// Cookie helper functions (CS50 compatible)
+function setCookie(name, value, days) {
+    const expires = new Date();
+    expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+    document.cookie = name + '=' + value + ';expires=' + expires.toUTCString() + ';path=/';
+}
+
+function getCookie(name) {
+    const nameEQ = name + '=';
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+    }
+    return null;
+}
+
+// Theme toggle function
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    setCookie('theme', newTheme, 365);
+}
+
+// Modal toggle function
+function toggleModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal.style.display === "block") {
+        modal.style.display = "none";
+    } else {
+        modal.style.display = "block";
+    }
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = "none";
+    }
+}
+
+// Rename account function
+function renameAccount(accountId, currentName) {
+    document.getElementById('rename_account_id').value = accountId;
+    document.getElementById('new_account_name').value = currentName;
+    toggleModal('manageAccountsModal');
+    toggleModal('renameAccountModal');
+}
+</script>
+{% endblock %}

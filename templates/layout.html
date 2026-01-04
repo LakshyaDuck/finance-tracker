@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        {% if session.get('theme') == 'dark' %}
+        document.documentElement.setAttribute('data-theme', 'dark');
+        {% endif %}
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{% endblock %} - Fortuna</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">Fortuna</div>
+
+            <button class="nav-toggle" id="navToggle">
+                <span class="current-page">{% block nav_title %}Dashboard{% endblock %}</span>
+                <svg class="dropdown-arrow" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                </svg>
+            </button>
+
+            <div class="nav-menu" id="navMenu">
+                <a href="/" class="nav-link">Home</a>
+                <a href="/transactions" class="nav-link">Transactions</a>
+                <a href="/budgets" class="nav-link">Budgets</a>
+                <a href="/analytics" class="nav-link">Analytics</a>
+                <a href="/settings" class="nav-link">Settings</a>
+                <a href="/logout" class="nav-link">Logout</a>
+
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block main %}{% endblock %}
+    </main>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

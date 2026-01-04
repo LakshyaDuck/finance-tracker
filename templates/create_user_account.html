@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+
+{% block title %}Create User Account{% endblock %}
+{% block nav_title %}Create User Account{% endblock %}
+
+{% block main %}
+<div class="center-container">
+    <div class="card account-card">
+        <h1 class="account-title">Create User Account</h1>
+        <p class="account-subtitle">Join Fortuna to manage your account</p>
+
+        <form action="/create_user_account" method="post">
+            <div class="form-group">
+                <label class="form-label" for="name">Name</label>
+                <input class="form-control" type="text" name="name" id="name" autocomplete="off" autofocus required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="password">Descirption</label>
+                <input class="form-control" type="text" name=descirption" id="descirption" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="currency">Account</label>
+                <select class="form-control" name="type" id="type" required>
+                    <option value="emergency">Safe Account (For Emergency Funds)</option>
+                    <option value="savings">Savings Accounnt</option>
+                    <option value="current">Current Account</option>
+                    <option value="business">Business Account</option>
+                    <option value="investment">Investment Account</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary btn-full" type="submit">Create Account</button>
+
+            <div class="divider-text">Want to Back</div>
+            <a href="/layout" class="btn btn-secondary btn-full">Back</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

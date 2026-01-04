@@ -1,0 +1,163 @@
+{% extends "layout.html" %}
+
+{% block title %}Home{% endblock %}
+{% block nav_title %}Home{% endblock %}
+
+{% block main %}
+<div class="dashboard-container">
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+        <div class="summary-card">
+            <div class="card-icon">💰</div>
+            <div class="card-content">
+                <p class="card-label">{{ account_name }} Balance</p>
+                <h2 class="card-value">{{ account_balance|usd }}</h2>
+                <p class="card-label" style="font-size: 0.75rem; margin-top: 0.25rem; text-transform: capitalize;">{{ account_type }}</p>
+            </div>
+        </div>
+
+        <div class="summary-card income">
+            <div class="card-icon">📈</div>
+            <div class="card-content">
+                <p class="card-label">This Month's Income</p>
+                <h2 class="card-value">{{ monthly_income|usd }}</h2>
+            </div>
+        </div>
+
+        <div class="summary-card expense">
+            <div class="card-icon">📉</div>
+            <div class="card-content">
+                <p class="card-label">This Month's Expenses</p>
+                <h2 class="card-value">{{ monthly_expenses|usd }}</h2>
+            </div>
+        </div>
+
+        <div class="summary-card net {% if monthly_net >= 0 %}positive{% else %}negative{% endif %}">
+            <div class="card-icon">💵</div>
+            <div class="card-content">
+                <p class="card-label">Monthly Net (Income - Expenses)</p>
+                <h2 class="card-value">{{ monthly_net|usd }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <!-- Budget Overview -->
+<div class="budget-overview">
+    <div class="section-header">
+        <h2>Budget Overview</h2>
+        <a href="/budgets" class="view-all-link">View All →</a>
+    </div>
+
+    {% if budget_alerts and budget_alerts|length > 0 %}
+    <div class="budget-alerts">
+        {% for alert in budget_alerts %}
+        <div class="budget-alert {% if alert.percent >= 100 %}exceeded{% elif alert.percent >= 80 %}warning{% endif %}">
+            <div class="alert-info">
+                <span class="alert-category">{{ alert.category_name }}</span>
+                <span class="alert-amount">{{ alert.spent|usd }} / {{ alert.budget_limit|usd }}</span>
+            </div>
+            <div class="alert-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {% if alert.percent <= 100 %}{{ alert.percent }}{% else %}100{% endif %}%"></div>
+                </div>
+                <span class="alert-percent">{{ "%.0f"|format(alert.percent) }}%</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>No budget alerts (spending below 80%)</p>
+        <a href="/budgets" class="btn btn-secondary">Manage Budgets</a>
+    </div>
+    {% endif %}
+</div>
+
+
+    <!-- Recent Transactions and Quick Actions -->
+    <div class="dashboard-grid">
+        <!-- Recent Transactions -->
+        <div class="recent-transactions">
+            <div class="section-header">
+                <h2>Recent Transactions</h2>
+                <a href="/transactions" class="view-all-link">View All →</a>
+            </div>
+
+            {% if recent_transactions %}
+            <div class="transaction-list">
+                {% for transaction in recent_transactions %}
+                <div class="transaction-item">
+                    <div class="transaction-icon">
+                        {% if transaction.type == 'income' %}
+                        📥
+                        {% elif transaction.type == 'expense' %}
+                        📤
+                        {% else %}
+                        👤
+                        {% endif %}
+                    </div>
+                    <div class="transaction-details">
+                        <p class="transaction-title">
+                            {% if transaction.category_name %}
+                                {{ transaction.category_name }}
+                            {% elif transaction.person_name %}
+                                {{ transaction.person_name }} ({{ transaction.direction }})
+                            {% else %}
+                                Transaction
+                            {% endif %}
+                        </p>
+                        <p class="transaction-meta">{{ transaction.date }}</p>
+                    </div>
+                    <div class="transaction-amount {% if transaction.type == 'income' %}income{% else %}expense{% endif %}">
+                        {% if transaction.type == 'income' %}+{% else %}-{% endif %}{{ transaction.amount|usd }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <p>No transactions yet</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <h2>Quick Actions</h2>
+            <div class="action-buttons">
+                <a href="/add_transaction" class="action-btn primary">
+                    <span class="action-icon">➕</span>
+                    <div>
+                        <p class="action-title">Add Transaction</p>
+                        <p class="action-desc">Record income or expense</p>
+                    </div>
+                </a>
+
+                <a href="/transactions" class="action-btn">
+                    <span class="action-icon">📋</span>
+                    <div>
+                        <p class="action-title">View Transactions</p>
+                        <p class="action-desc">See all your transactions</p>
+                    </div>
+                </a>
+
+                <a href="/budgets" class="action-btn">
+                    <span class="action-icon">🎯</span>
+                    <div>
+                        <p class="action-title">Manage Budgets</p>
+                        <p class="action-desc">Set spending limits</p>
+                    </div>
+                </a>
+
+                <a href="/settings" class="action-btn">
+                    <span class="action-icon">⚙️</span>
+                    <div>
+                        <p class="action-title">Settings</p>
+                        <p class="action-desc">Manage accounts & preferences</p>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
