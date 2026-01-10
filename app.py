@@ -1,29 +1,26 @@
-# Development Process:
-# - Core logic and database design: Created by me
-# - Code structure and implementation: Developed with AI assistance (Claude/Perplexity)
-# - All code is reviewed and modified by me
-# - Features designed and debugged through iterative problem-solving
-
 from flask import Flask, flash, redirect, render_template, request, session
 from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
-from cs50 import SQL
 from datetime import date
-
+from sqlalchemy import select, func
+from database import init_db, get_db, close_db
+from models import User, Account, Transaction, Category, Budget, Transfer
 from helpers import apology, login_required, usd
 
 app = Flask(__name__)
 
-app.jinja_env.filters["usd"] = usd # For formatting in usd
-
+app.config["SECRET_KEY"] = "dev-secret-key-change-in-production"
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
-db = SQL("sqlite:///fortuna.db")
+app.jinja_env.filters["usd"] = usd
+
+with app.app_context():
+    init_db()
 
 '''
-First page will give user two optiocd
+First page will give user two options
 1. Register
 2. Login
 The web app can not be used without it.
@@ -59,7 +56,7 @@ def login():
     if not username or not password:
         return apology("Must provide username and password", 403)
 
-    rows = db.execute("SELECT * FROM users WHERE username = ?", username)
+    rows = db.execute(select(User.id).where(User.username==username))
 
     if len(rows) != 1:
         return apology("Invalid username", 403)
@@ -70,25 +67,13 @@ def login():
     session["user_id"] = rows[0]["id"]
 
     # Get user's Main Account
-    main_account = db.execute("""
-        SELECT id FROM accounts
-        WHERE user_id = ? AND type = 'current'
-        ORDER BY created_at ASC
-        LIMIT 1
-    """, session["user_id"])
-
+    main_account = db.execute(select(Account.id).where(Account.user_id==session["user_id"]).where(Account.type=="current")).first()
     # If no main account exists, create one
     if not main_account:
-        db.execute("INSERT INTO accounts (user_id, name, type, balance) VALUES (?, ?, ?, ?)",
-                   session["user_id"], "Main Account", "current", 0)
-        main_account = db.execute("""
-            SELECT id FROM accounts
-            WHERE user_id = ? AND type = 'current'
-            ORDER BY created_at ASC
-            LIMIT 1
-        """, session["user_id"])
-
-    session["account_id"] = main_account[0]["id"]
+        db.execute(insert(Account).values(user_id=session["user_id"], name="Main Account", type="current", balance=0))
+        main_account = db.execute(select(Account.id).where(Account.user_id==session["user_id"]).where(Account.type=="current")).first()
+        
+    session["account_id"] = main_account
 
     return redirect("/")
 
