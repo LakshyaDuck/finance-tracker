@@ -1,70 +1,41 @@
-# This file is taken from finance project
 import requests
 
 from flask import redirect, render_template, session
 from functools import wraps
-
-
-def apology(message, code=400):
-    """Render message as an apology to user."""
-
-    def escape(s):
-        """
-        Escape special characters.
-
-        https://github.com/jacebrowning/memegen#special-characters
-        """
-        for old, new in [
-            ("-", "--"),
-            (" ", "-"),
-            ("_", "__"),
-            ("?", "~q"),
-            ("%", "~p"),
-            ("#", "~h"),
-            ("/", "~s"),
-            ('"', "''"),
-        ]:
-            s = s.replace(old, new)
-        return s
-
-    return render_template("apology.html", top=code, bottom=escape(message)), code
-
+from sqlalchemy import select
 
 def login_required(f):
-    """
-    Decorate routes to require login.
-
-    https://flask.palletsprojects.com/en/latest/patterns/viewdecorators/
-    """
-
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if session.get("user_id") is None:
-            return redirect("/login")
+            return redirect("/account")
         return f(*args, **kwargs)
 
     return decorated_function
 
 
-def lookup(symbol):
-    """Look up quote for symbol."""
-    url = f"https://finance.cs50.io/quote?symbol={symbol.upper()}"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()  # Raise an error for HTTP error responses
-        quote_data = response.json()
-        return {
-            "name": quote_data["companyName"],
-            "price": quote_data["latestPrice"],
-            "symbol": symbol.upper()
-        }
-    except requests.RequestException as e:
-        print(f"Request error: {e}")
-    except (KeyError, ValueError) as e:
-        print(f"Data parsing error: {e}")
-    return None
+def apology(message, code=400):
+    return render_template("apology.html", top=code, bottom=message), code
 
 
 def usd(value):
     """Format value as USD."""
     return f"${value:,.2f}"
+
+
+def get_user_by_id():
+    return session.get("user_id")
+
+
+def get_account_with_verification():
+    user_id = get_user_by_id()
+    if not user_id:
+        return None
+    account_id = session.get("account_id")
+    if account_id is None:
+        return None
+    a_ids = select(Account.id).where(Account.user_id == user_id)
+    if account_id not in a_ids:
+        return None
+    return account_id
+
