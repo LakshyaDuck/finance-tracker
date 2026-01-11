@@ -1,8 +1,12 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from models import Base, Category, PRESET_CATEGORIES
+import os
+from pathlib import Path
 
-engine = create_engine('sqlite:///fortuna.db', echo=False)
+Path("data").mkdir(exist_ok=True)
+
+engine = create_engine('sqlite:///data/fortuna.db', echo=False)
 db_session = scoped_session(sessionmaker(bind=engine))
 
 def init_db():

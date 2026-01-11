@@ -1,2 +1,38 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Flask
+instance/
+flask_session/
+
+# Database
+*.db
+data/
+
+# IDEs
+.idea/
+
+# Editor temp files
+*.swp
+*.swo
+*~
+.*.swp
+
+# Logs
+*.log
+
+# Personal notes
 todo.txt
-init_db.py
