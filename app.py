@@ -6,10 +6,14 @@ from sqlalchemy import select, func
 from database import init_db, get_db, close_db
 from models import User, Account, Transaction, Category, Budget, Transfer
 from helpers import apology, login_required, usd
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 app = Flask(__name__)
 
-app.config["SECRET_KEY"] = "dev-secret-key-change-in-production"
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
@@ -18,6 +22,15 @@ app.jinja_env.filters["usd"] = usd
 
 with app.app_context():
     init_db()
+
+@app.before_request
+def before_request():
+    from flask import g
+    g.db = get_db()
+
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    close_db()
 
 '''
 First page will give user two options
@@ -56,24 +69,31 @@ def login():
     if not username or not password:
         return apology("Must provide username and password", 403)
 
-    rows = db.execute(select(User.id).where(User.username==username))
+    user = g.db.query(User).filter_by(username=username).first()
 
-    if len(rows) != 1:
+    if not user:
         return apology("Invalid username", 403)
 
     if not check_password_hash(rows[0]["hash"], password):
         return apology("Invalid password", 403)
 
-    session["user_id"] = rows[0]["id"]
+    session["user_id"] = user.id
 
     # Get user's Main Account
-    main_account = db.execute(select(Account.id).where(Account.user_id==session["user_id"]).where(Account.type=="current")).first()
+    main_account = g.db.query(Account).filter_by(user_id=user, type="current").order_by(Account.created_at).first()
     # If no main account exists, create one
     if not main_account:
-        db.execute(insert(Account).values(user_id=session["user_id"], name="Main Account", type="current", balance=0))
-        main_account = db.execute(select(Account.id).where(Account.user_id==session["user_id"]).where(Account.type=="current")).first()
-        
-    session["account_id"] = main_account
+        main_account = Account(
+            user_id=user,
+            type="current",
+            name="Main Account",
+            balance=0
+        )
+        g.db.add(main_account)
+        g.db.commit()
+    
+
+    session["account_id"] = main_account.id
 
     return redirect("/")
 
@@ -100,27 +120,30 @@ def register():
 
     try:
         pass_hash = generate_password_hash(password)
-        db.execute("INSERT INTO users (username, hash, currency) VALUES (?, ?, ?)",
-                   username, pass_hash, currency)
+        user = User(
+            username=username,
+            hash=pass_hash,
+            currency=currency
+        )
 
-        user = db.execute("SELECT * FROM users WHERE username = ?", username)
-        session["user_id"] = user[0]["id"]
+        g.db.add(user)
+        g.db.flush()
 
         # CREATE DEFAULT CURRENT ACCOUNT
-        db.execute("INSERT INTO accounts (user_id, name, type, balance) VALUES (?, ?, ?, ?)",
-                   session["user_id"], "Main Account", "current", 0)
-
-        new_account = db.execute("""
-            SELECT id FROM accounts
-            WHERE user_id = ? AND type = 'current'
-            ORDER BY created_at ASC
-            LIMIT 1
-        """, session["user_id"])
-
-        session["account_id"] = new_account[0]["id"]
-
+        main_account = Account(
+            user_id=user.id,
+            type="current",
+            name="Main Account",
+            balance=0
+        )
+        g.db.add(main_account)
+        g.db.flush()
+        session["user_id"] = user.id
+        session["account_id"] = main_account.id
+        g.db.commit()
         return redirect("/")
     except:
+        g.db.rollback()
         return apology("Username already exists", 403)
 
 # ====================
@@ -137,38 +160,33 @@ def home():
     # Check if account is selected in session
     if "account_id" not in session:
         # Create Main Account if it doesn't exist
-        main_account = db.execute("""
-            SELECT id FROM accounts
-            WHERE user_id = ? AND type = 'current'
-            ORDER BY created_at ASC
-            LIMIT 1
-        """, user_id)
+        main_account = g.db(Account).filter_by(user_id=user_id, type="current").order_by(Account.created_at).first()
 
         if not main_account:
-            db.execute("INSERT INTO accounts (user_id, name, type, balance) VALUES (?, ?, ?, ?)",
-                       user_id, "Main Account", "current", 0)
-            main_account = db.execute("""
-                SELECT id FROM accounts
-                WHERE user_id = ? AND type = 'current'
-                ORDER BY created_at ASC
-                LIMIT 1
-            """, user_id)
+            main_account = Account(
+                user_id=user_id,
+                name="Main Account",
+                type="current",
+                balance=0
+            )
+            g.db.add(main_account)
+            g.db.commit()
 
-        session["account_id"] = main_account[0]["id"]
+        session["account_id"] = main_account.id
 
     account_id = session["account_id"]
     current_month = date.today().strftime("%Y-%m")
 
     # Get current account details
-    account = db.execute("SELECT * FROM accounts WHERE id = ? AND user_id = ?", account_id, user_id)
+    account = g.db.query(Account).filter_by(id=account_id, user_id=user_id).first()
 
     if not account:
         return apology("Account not found", 404)
 
-    account_balance = account[0]["balance"]
-    account_name = account[0]["name"]
-    account_type = account[0]["type"]
-
+    account_balance = account.balance
+    account_name = account.name
+    account_type = account.type
+    ### Fixed Till This Point ###
     # Get this month's income for THIS account only
     income_result = db.execute("""
         SELECT COALESCE(SUM(amount), 0) as total FROM transactions
