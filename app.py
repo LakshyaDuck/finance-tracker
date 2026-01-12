@@ -188,62 +188,78 @@ def home():
     account_type = account.type
     ### Fixed Till This Point ###
     # Get this month's income for THIS account only
-    income_result = db.execute("""
-        SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-        WHERE user_id = ? AND account_id = ? AND type = 'income'
-        AND strftime('%Y-%m', date) = ?
-    """, user_id, account_id, current_month)
-    monthly_income = income_result[0]["total"]
+    income = g.db.query(func.sum(Transaction.amount, 0))\
+        .filter(
+            user_id == user_id,
+            account_id == account_id,
+            type == "income",
+            func.strftimr("Y%-m%", Transaction.date == current_month)
+        ).scaler()
 
     # Get this month's expenses for THIS account only
-    expense_result = db.execute("""
-        SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-        WHERE user_id = ? AND account_id = ? AND type = 'expense'
-        AND strftime('%Y-%m', date) = ?
-    """, user_id, account_id, current_month)
-    monthly_expenses = expense_result[0]["total"]
+    expense = g.db.query(func.sum(Transaction.amount, 0))\
+        .filter(
+            user_id == user_id,
+            account_id == account_id,
+            type == "expense",
+            func.strftimr("Y%-m%", Transaction.date == current_month)
+        ).scaler()
 
     # Calculate monthly net
-    monthly_net = monthly_income - monthly_expenses
+    monthly_net = income - expense
 
     # Get budget alerts (spending across ALL accounts)
-    budget_alerts = db.execute("""
-        SELECT
-            c.name as category_name,
-            b.monthly_limit as budget_limit,
-            COALESCE(SUM(t.amount), 0) as spent,
-            (COALESCE(SUM(t.amount), 0) / b.monthly_limit * 100) as percent
-        FROM budgets b
-        JOIN categories c ON b.category_id = c.id
-        LEFT JOIN transactions t ON t.category_id = c.id
-            AND t.user_id = ?
-            AND strftime('%Y-%m', t.date) = ?
-            AND t.type = 'expense'
-            WHERE b.user_id = ? AND b.month = ?
-        GROUP BY b.id, c.name, b.monthly_limit
-        HAVING percent >= 80
-        ORDER BY percent DESC
-        LIMIT 5
-        """, user_id, current_month, user_id, current_month)
-
+    budget_alerts = g.db.query(
+        Category.name.label('category_name'),
+        Budget.monthly_limit.label('budget_limit'),
+        func.coalesce(func.sum(Transaction.amount), 0).label('spent'),
+        (func.coalesce(func.sum(Transaction.amount), 0) / Budget.monthly_limit * 100).label('percent')
+    )\
+    .select_from(Budget)\
+    .join(Category, Budget.category_id == Category.id)\
+    .outerjoin(
+        Transaction,
+        (Transaction.category_id == Category.id) &
+        (Transaction.user_id == user_id) &
+        (func.strftime('%Y-%m', Transaction.date) == current_month) &
+        (Transaction.type == 'expense')
+    )\
+    .filter(Budget.user_id == user_id, Budget.month == current_month)\
+    .group_by(Budget.id, Category.name, Budget.monthly_limit)\
+    .having((func.coalesce(func.sum(Transaction.amount), 0) / Budget.monthly_limit * 100) >= 80)\
+    .order_by((func.coalesce(func.sum(Transaction.amount), 0) / Budget.monthly_limit * 100).desc())\
+    .limit(5)\
+    .all()
 
     # Get recent transactions for THIS account only
-    recent_transactions = db.execute("""
-        SELECT t.id, t.amount, t.date, t.type, t.person_name, t.direction,
-               c.name as category_name
-        FROM transactions t
-        LEFT JOIN categories c ON t.category_id = c.id
-        WHERE t.user_id = ? AND t.account_id = ?
-        ORDER BY t.date DESC, t.id DESC
-        LIMIT 8
-    """, user_id, account_id)
+    recent_transactions = g.db.query(
+        Transaction.id.label("id"),
+        Transaction.amount.label("amount"),
+        Transaction.date.label("date"),
+        Transaction.type.label("type"),
+        Transaction.person_name.label("person_name"),
+        Transaction.direction.label("direction"),
+        Category.name.label("name")
+    )\
+    .select_from(Transaction)\
+    .join(Category, Transaction.category_id == Category.id)\
+    .outer_join(
+        Transaction,
+        (Transaction.category_id == Category.id) &
+        (Transaction.user_id == user_id) &
+        (func.strftime('%Y-%m', Transaction.date) == current_month)
+    )\
+    .filter(Budget.user_id == user_id)\
+    .order_by(Transaction.date.desc(), Transaction.id.desc())\
+    .limit(8)\
+    .all()
 
     return render_template('home.html',
                          account_balance=account_balance,
                          account_name=account_name,
                          account_type=account_type,
-                         monthly_income=monthly_income,
-                         monthly_expenses=monthly_expenses,
+                         monthly_income=income,
+                         monthly_expenses=expense,
                          monthly_net=monthly_net,
                          budget_alerts=budget_alerts,
                          recent_transactions=recent_transactions)
@@ -294,18 +310,6 @@ def transactions():
     """, session["user_id"])
 
     return render_template('transactions.html', transactions=transactions)
-
-
-
-
-
-
-
-##### BELOW FUNCTION IS NOT REVIEWED #######
-
-
-
-
 
 
 # ====================
@@ -460,16 +464,6 @@ def add_transaction():
             except Exception as e:
                 print(f"Error: {e}")
                 return apology("Something went wrong", 400)
-
-
-
-##### ABOVE FUNCTION IS NOT REVIEWED #######
-
-
-
-
-
-
 
 
 # ====================
