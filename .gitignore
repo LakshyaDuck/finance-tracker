@@ -36,3 +36,6 @@ data/
 
 # Personal notes
 todo.txt
+
+# Cursor file
+.vscode
