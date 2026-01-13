@@ -737,17 +737,22 @@ def rename_account():
         return redirect("/settings")
 
     # Verify account belongs to user
-    account = db.execute("""
-        SELECT id FROM accounts
-        WHERE id = ? AND user_id = ?
-    """, account_id, session["user_id"])
+    account = g.db.query(Account)\
+        .filter_by(
+            id=account_id,
+            user_id=session["user_id"]
+        )\
+        .first()
 
     if not account:
         flash("Account not found", "error")
         return redirect("/settings")
 
     try:
-        db.execute("UPDATE accounts SET name = ? WHERE id = ?", new_name, account_id)
+        g.db.query(Account)\
+            .filter_by(id=account_id)\
+            .update({"name": new_name})
+        g.db.commit()
         flash(f"Account renamed to '{new_name}' successfully!", "success")
     except Exception as e:
         flash("Failed to rename account", "error")
@@ -767,10 +772,12 @@ def delete_account():
         return redirect("/settings")
 
     # Verify that account belongs to user
-    account = db.execute("""
-        SELECT id FROM accounts
-        WHERE id = ? AND user_id = ?
-    """, account_id, session["user_id"])
+    account = g.db.query(Account)\
+        .filter_by(
+            id=account_id,
+            user_id=session["user_id"]
+        )\
+        .first()
 
     if not account:
         flash("Account not found", "error")
@@ -782,20 +789,25 @@ def delete_account():
         return redirect("/settings")
 
     # Check if user has more than one account
-    accounts = db.execute("SELECT COUNT(*) as count FROM accounts WHERE user_id = ?", session["user_id"])
-    if accounts[0]["count"] <= 1:
+    account = g.db.query(func.coalesce(func.count(Account.id)).label("count")).filter_by(user_id=session["user_id"])
+    if account.count <= 1:
         flash("Cannot delete your only account", "error")
         return redirect("/settings")
 
     try:
         # Delete all transactions for this account
-        db.execute("DELETE FROM transactions WHERE account_id = ?", account_id)
+        g.db.query(Transaction)\
+            .filter_by(account_id=account_id)\
+            .delete()
 
         # Delete the account
-        db.execute("DELETE FROM accounts WHERE id = ?", account_id)
-
+        g.db.query(Account)\
+            .filter_by(id=account_id)\
+            .delete()
+        g.db.commit()
         flash("Account deleted successfully!", "success")
     except Exception as e:
+        g.db.rollback()
         flash("Failed to delete account", "error")
 
     return redirect("/settings")
