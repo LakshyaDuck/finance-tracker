@@ -281,10 +281,16 @@ def create_user_account():
         if not name or not type:
             return apology("Please enter the details", 400)
         try:
-            db.execute("INSERT INTO accounts (user_id, name, type) VALUES (?, ?, ?)",
-                      session['user_id'], name, type)
+            account = Account(
+                user_id=session["user_id"],
+                name=name,
+                type=type
+            )
+            g.db.add(account)
+            g.db.commit()
             return redirect('/')
         except:
+            g.db.rollback()
             return apology("Either name is same or type entered was invalid", 400)
 
 @app.route('/logout')
@@ -300,14 +306,27 @@ def logout():
 @login_required
 def transactions():
     # Join with categories to get category names
-    transactions = db.execute("""
-        SELECT t.id, t.amount, t.description, t.date, t.type,
-               t.person_name, t.direction, c.name as category_name
-        FROM transactions t
-        LEFT JOIN categories c ON t.category_id = c.id
-        WHERE t.user_id = ?
-        ORDER BY t.date DESC
-    """, session["user_id"])
+    user_id = session["user_id"]
+    transactions = g.db.query(
+        Transaction.id.label("id"),
+        Transaction.amount.label("amount"),
+        Transaction.description.label("description"),
+        Transaction.date.label("date"),
+        Transaction.type.label("type"),
+        Transaction.person_name.label("person_name"),
+        Transaction.direction.label("direction"),
+        Category.name.label("name")
+        )\
+        .select_from(Budget)\
+        .join(Category, Transaction.category_id == Category.id)\
+        .outerjoin(
+            Transaction,
+            (Transaction.category_id == Category.id) &
+            (Transaction.user_id == user_id)
+        )\
+        .filter(Transaction.user_id == user_id)\
+        .order_by(Transaction.date.desc())\
+        .all()
 
     return render_template('transactions.html', transactions=transactions)
 
@@ -478,38 +497,49 @@ def delete_transaction():
         return apology("Invalid transaction", 400)
 
     # Get full transaction details before deleting
-    transaction = db.execute("""
-        SELECT user_id, account_id, amount, type, direction
-        FROM transactions
-        WHERE id = ?
-    """, transaction_id)
+    transaction = g.db.query(Transaction).filter(Transaction.id == transaction_id).first()
 
-    if not transaction or transaction[0]["user_id"] != session["user_id"]:
+    if not transaction or transaction.user_id != session["user_id"]:
         return apology("Unauthorized", 403)
 
     # Extract transaction details
-    account_id = transaction[0]["account_id"]
-    amount = transaction[0]["amount"]
-    trans_type = transaction[0]["type"]
-    direction = transaction[0]["direction"]
+    account_id = transaction.account_id
+    amount = transaction.amount
+    trans_type = transaction.type
+    direction = transaction.direction
 
     # Update Account balance according to transaction type
-    if trans_type == "income":
-        # Subtrat the money if income
-        db.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", amount, account_id)
-    elif trans_type == "expense":
-        # Add the money if expense
-        db.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", amount, account_id)
-    elif trans_type == "personal":
-        if direction == "lent":
-            # Add if lent
-            db.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", amount, account_id)
-        elif direction == "borrowed":
-            # Subtract if borrowed
-            db.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", amount, account_id)
-
-    # Delete the transaction
-    db.execute("DELETE FROM transactions WHERE id = ?", transaction_id)
+    try:
+        if trans_type == "income":
+            # Subtrat the money if income
+            g.db.query(Account)\
+                .filter_by(account_id=account_id)\
+                .update({"balance": Account.balance - amount})
+        elif trans_type == "expense":
+            # Add the money if expense
+            g.db.query(Account)\
+                .filter_by(account_id=account_id)\
+                .update({"balance": Account.balance + amount})
+        elif trans_type == "personal":
+            if direction == "lent":
+                # Add if lent
+                g.db.query(Account)\
+                    .filter_by(account_id=account_id)\
+                    .update({"balance": Account.balance + amount})
+            elif direction == "borrowed":
+                # Subtract if borrowed
+                g.db.query(Account)\
+                    .filter_by(account_id=account_id)\
+                    .update({"balance": Account.balance - amount})
+                
+        # Delete the transaction
+        g.db.query(Transaction)\
+            .filter_by(id=transaction_id)\
+            .delete()
+        g.db.commit()
+    except:
+        g.db.rollback()
+        return apology("Could not delete transaction", 400)
 
     return redirect("/transactions")
 
@@ -640,20 +670,22 @@ def switch_account():
         return redirect("/settings")
 
     # Verify the account belongs to the user
-    account = db.execute("""
-        SELECT id, name FROM accounts
-        WHERE id = ? AND user_id = ?
-    """, new_account_id, session["user_id"])
+    account = g.db.query(Account)\
+        .filter_by(
+            id=new_account_id,
+            user_id=session["user_id"]
+        )\
+        .first()
 
     if not account:
         flash("Invalid account", "error")
-        return redirect("/settings")
+        return redirect("/settindgs")
 
     # Update session with new account
     session["account_id"] = int(new_account_id)
 
     # Flash success message
-    flash(f"Switched to {account[0]['name']} successfully!", "success")
+    flash(f"Switched to {account.name} successfully!", "success")
 
     return redirect("/")
 
