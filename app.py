@@ -831,15 +831,18 @@ def change_password():
         return redirect("/settings")
 
     # Get current user hash
-    curr_hash = db.execute("SELECT hash FROM users WHERE id = ?", session["user_id"])
+    curr_hash = g.db.query(User).filter_by(id=session["user_id"]).first().hash
 
-    if not curr_hash or not check_password_hash(curr_hash[0]["hash"], current_password):
+    if not curr_hash or not check_password_hash(curr_hash, current_password):
         flash("Current password is incorrect", "error")
         return redirect("/settings")
 
     try:
         new_hash = generate_password_hash(new_password)
-        db.execute("UPDATE users SET hash = ? WHERE id = ?", new_hash, session["user_id"])
+        g.db.query(User)\
+            .filter_by(id=session["user_id"])\
+            .update({"hash": new_hash})
+        g.db.commit()
         flash("Password changed successfully!", "success")
     except Exception as e:
         flash("Failed to change password", "error")
@@ -864,7 +867,10 @@ def change_currency():
         return redirect("/settings")
 
     try:
-        db.execute("UPDATE users SET currency = ? WHERE id = ?", new_currency, session["user_id"])
+        g.db.query(User)\
+            .filter_by(id=session["user_id"])\
+            .update({"currency": new_currency})
+        g.db.commit()
         flash(f"Currency changed to {new_currency} successfully!", "success")
     except Exception as e:
         flash("Failed to change currency", "error")
@@ -913,24 +919,30 @@ def delete_category():
         return redirect("/settings")
 
     # Verify category belongs to user and is not preset
-    category = db.execute("""
-        SELECT id FROM categories
-        WHERE id = ? AND user_id = ? AND is_preset = 0
-    """, category_id, session["user_id"])
+    category_id = g.db.query(Category)\
+        .filter_by(
+            id=category_id,
+            user_id=session["user_id"]
+        ).first().id
 
-    if not category:
+    if not category_id:
         flash("Category not found or cannot be deleted", "error")
         return redirect("/settings")
 
     try:
         # Set category_id to NULL for transactions using this category
-        db.execute("UPDATE transactions SET category_id = NULL WHERE category_id = ?", category_id)
+        g.db.query(Transaction)\
+            .filter_by(category_id=category_id)\
+            .update({"category_id": None})
 
         # Delete the category
-        db.execute("DELETE FROM categories WHERE id = ?", category_id)
-
+        g.db.query(Category)\
+            .filter_by(id=category_id)\
+            .delete()
+        g.db.commit()
         flash("Category deleted successfully!", "success")
     except Exception as e:
+        g.db.rollback()
         flash("Failed to delete category", "error")
 
     return redirect("/settings")
