@@ -623,37 +623,36 @@ def settings():
     user_id = session["user_id"]
 
     # Get all user accounts
-    accounts = db.execute("""
-        SELECT id, name, type, balance
-        FROM accounts
-        WHERE user_id = ?
-        ORDER BY created_at ASC
-    """, user_id)
+    accounts = g.db.query(Account)\
+        .filter_by(user_id=session["user_id"])\
+        .order_by(Account.created_at)\
+        .all()
 
     # Get current account
     current_account_id = session.get("account_id")
-    current_account = db.execute("""
-        SELECT id, name, type
-        FROM accounts
-        WHERE id = ?
-    """, current_account_id)
+    current_account = g.db.query(Account)\
+        .filter_by(id=current_account_id)\
+        .first()
 
     # Get user currency
-    user = db.execute("SELECT currency FROM users WHERE id = ?", user_id)
-    user_currency = user[0]["currency"] if user else "USD"
+    user = g.db.query(User)\
+        .filter_by(id=user_id)\
+        .first()
+    user_currency = user.currency if user else "USD"
 
     # Get user's custom categories
-    user_categories = db.execute("""
-        SELECT id, name, type
-        FROM categories
-        WHERE user_id = ? AND is_preset = 0
-        ORDER BY type, name
-    """, user_id)
+    user_categories = g.db.query(Category)\
+        .filter_by(
+            user_id=current_account_id,
+            is_preset=0
+        )\
+        .order_by(Category.type, Category.name)\
+        .all()
 
     return render_template('settings.html',
                          accounts=accounts,
                          current_account_id=current_account_id,
-                         current_account=current_account[0] if current_account else None,
+                         current_account=current_account if current_account else None,
                          user_currency=user_currency,
                          user_categories=user_categories)
 
