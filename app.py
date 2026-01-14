@@ -907,13 +907,18 @@ def create_category():
         return redirect("/settings")
 
     try:
-        db.execute("""
-            INSERT INTO categories (user_id, name, type, is_preset)
-            VALUES (?, ?, ?, 0)
-        """, session["user_id"], category_name, category_type)
+        new_category = Category(
+            user_id=session["user_id"],
+            name=category_name,
+            type=category_type,
+            is_preset=0
+        )
+        g.db.add(new_category)
+        g.db.commit()
 
         flash(f"Category '{category_name}' created successfully!", "success")
     except Exception as e:
+        g.db.rollback()
         flash("Failed to create category", "error")
 
     return redirect("/settings")
