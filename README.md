@@ -109,10 +109,6 @@ finance-tracker/
 - Email budget alerts
 - Mobile-responsive design improvements
 
-## License
-
-MIT License
-
 ## Author
 
 Lakshya - [GitHub](https://github.com/LakshyaDuck)
