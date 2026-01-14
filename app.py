@@ -1,4 +1,4 @@
-from flask import Flask, flash, redirect, render_template, request, session
+from flask import Flask, flash, redirect, render_template, request, session, g
 from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import date
@@ -25,7 +25,6 @@ with app.app_context():
 
 @app.before_request
 def before_request():
-    from flask import g
     g.db = get_db()
 
 @app.teardown_appcontext
@@ -74,17 +73,17 @@ def login():
     if not user:
         return apology("Invalid username", 403)
 
-    if not check_password_hash(rows[0]["hash"], password):
+    if not check_password_hash(user.hash, password):
         return apology("Invalid password", 403)
 
     session["user_id"] = user.id
 
     # Get user's Main Account
-    main_account = g.db.query(Account).filter_by(user_id=user, type="current").order_by(Account.created_at).first()
+    main_account = g.db.query(Account).filter_by(user_id=user.id, type="current").order_by(Account.created_at).first()
     # If no main account exists, create one
     if not main_account:
         main_account = Account(
-            user_id=user,
+            user_id=user.id,
             type="current",
             name="Main Account",
             balance=0
@@ -160,7 +159,7 @@ def home():
     # Check if account is selected in session
     if "account_id" not in session:
         # Create Main Account if it doesn't exist
-        main_account = g.db(Account).filter_by(user_id=user_id, type="current").order_by(Account.created_at).first()
+        main_account = g.db.query(Account).filter_by(user_id=user_id, type="current").order_by(Account.created_at).first()
 
         if not main_account:
             main_account = Account(
@@ -186,24 +185,23 @@ def home():
     account_balance = account.balance
     account_name = account.name
     account_type = account.type
-    ### Fixed Till This Point ###
     # Get this month's income for THIS account only
     income = g.db.query(func.sum(Transaction.amount, 0))\
         .filter(
-            user_id == user_id,
+            Transaction.user_id == user_id,
             account_id == account_id,
-            type == "income",
+            Transaction.type == "income",
             func.strftimr("Y%-m%", Transaction.date == current_month)
         ).scaler()
 
     # Get this month's expenses for THIS account only
-    expense = g.db.query(func.sum(Transaction.amount, 0))\
+    expense = g.db.query(func.coalesce(func.sum(Transaction.amount, 0)))\
         .filter(
-            user_id == user_id,
+            Transaction.user_id == user_id,
             account_id == account_id,
             type == "expense",
             func.strftimr("Y%-m%", Transaction.date == current_month)
-        ).scaler()
+        ).scalar()
 
     # Calculate monthly net
     monthly_net = income - expense
@@ -265,44 +263,7 @@ def home():
                          recent_transactions=recent_transactions)
 
 
-# ====================
-# Create user account
-# ====================
-@app.route('/create_account', methods=["POST"])
-@login_required
-def create_account():
-    account_name = request.form.get('account_name')
-    account_type = request.form.get('account_type')
-    initial_balance = request.form.get('initial_balance')
 
-    if not account_name or not account_type:
-        flash("Account name and type are required", "error")
-        return redirect("/settings")
-
-    # Validate account type
-    valid_types = ['current', 'savings', 'safe', 'business', 'investment']
-    if account_type not in valid_types:
-        flash("Invalid account type", "error")
-        return redirect("/settings")
-
-    try:
-        initial_balance = float(initial_balance) if initial_balance else 0
-
-        new_account = Account(
-            user_id=session["user_id"],
-            name=account_name,
-            type=account_type,
-            balance=initial_balance
-        )
-        g.db.add(new_account)
-        g.db.commit()
-
-        flash(f"Account '{account_name}' created successfully!", "success")
-    except Exception as e:
-        g.db.rollback()
-        flash("Failed to create account", "error")
-
-    return redirect("/settings")
 
 @app.route('/logout')
 @login_required
@@ -603,7 +564,14 @@ def budgets():
 
         if not category_id or not monthly_limit:
             return apology("Please provide all fields", 400)
-
+monthly_income = g.db.query(
+    func.coalesce(func.sum(Transaction.amount), 0)
+).filter(
+    Transaction.user_id == user_id,
+    Transaction.account_id == account_id,
+    Transaction.type == 'income',
+    func.strftime('%Y-%m', Transaction.date) == current_month
+).scalar()
         # Check if budget already exists
         existing_budget = g.db.query(Budget).filter_by(
             user_id=session['user_id'],
