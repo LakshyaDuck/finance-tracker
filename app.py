@@ -554,29 +554,30 @@ def budgets():
         current_month = date.today().strftime("%Y-%m")
 
         # Get all expense categories (preset + user-created)
-        categories = db.execute("""
-            SELECT name, id FROM categories
-            WHERE (user_id = ? OR user_id IS NULL) AND type = 'expense'
-        """, session['user_id'])
+        categories = g.db.query(Category.name, Category.id).filter(
+            (Category.user_id == session['user_id']) | (Category.user_id == None),
+            Category.type == 'expense'
+        ).all()
 
         # Get budgets for current month
-        budgets = db.execute("""
-            SELECT * FROM budgets
-            WHERE user_id = ? AND month = ?
-        """, session['user_id'], current_month)
+        budgets = g.db.query(Budget).filter_by(
+            user_id=session['user_id'],
+            month=current_month
+        ).all()
 
         # Calculate spent amount for each category this month
-        spent = db.execute("""
-            SELECT category_id, SUM(amount) as total_spent
-            FROM transactions
-            WHERE user_id = ? AND type = 'expense' AND strftime('%Y-%m', date) = ?
-            GROUP BY category_id
-        """, session['user_id'], current_month)
+        spent = g.db.query(
+            Transaction.category_id,
+            func.sum(Transaction.amount).label('total_spent')
+        ).filter(
+            Transaction.user_id == session['user_id'],
+            Transaction.type == 'expense',
+            func.strftime('%Y-%m', Transaction.date) == current_month
+        ).group_by(Transaction.category_id).all()
 
         # Convert to dictionaries for easier lookup in template
-        # AI used for converting to dictionaries
-        budgets_dict = {b['category_id']: b['monthly_limit'] for b in budgets}
-        spent_dict = {s['category_id']: s['total_spent'] for s in spent}
+        budgets_dict = {b.category_id: b.monthly_limit for b in budgets}
+        spent_dict = {s.category_id: s.total_spent for s in spent}
 
         return render_template('budgets.html',
                              current_month=current_month,
@@ -593,25 +594,26 @@ def budgets():
             return apology("Please provide all fields", 400)
 
         # Check if budget already exists
-        existing_budget = db.execute("""
-            SELECT * FROM budgets
-            WHERE user_id = ? AND category_id = ? AND month = ?
-        """, session['user_id'], category_id, current_month)
+        existing_budget = g.db.query(Budget).filter_by(
+            user_id=session['user_id'],
+            category_id=category_id,
+            month=current_month
+        ).first()
 
-        if len(existing_budget) == 0:
+        if not existing_budget:
             # Insert new budget
-            db.execute("""
-                INSERT INTO budgets (user_id, category_id, monthly_limit, month)
-                VALUES (?, ?, ?, ?)
-            """, session['user_id'], category_id, monthly_limit, current_month)
+            new_budget = Budget(
+                user_id=session['user_id'],
+                category_id=category_id,
+                monthly_limit=monthly_limit,
+                month=current_month
+            )
+            g.db.add(new_budget)
         else:
             # Update existing budget
-            db.execute("""
-                UPDATE budgets
-                SET monthly_limit = ?
-                WHERE user_id = ? AND category_id = ? AND month = ?
-            """, monthly_limit, session['user_id'], category_id, current_month)
+            existing_budget.monthly_limit = monthly_limit
 
+        g.db.commit()
         return redirect('/budgets')
 
 # ====================
