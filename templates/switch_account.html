@@ -1,18 +1,28 @@
 {% extends "layout.html" %}
 
-{% block title %}
-    Switch Account
-{% endblock %}
+{% block title %}Switch Account{% endblock %}
+{% block nav_title %}Switch Account{% endblock %}
 
 {% block main %}
-    <div class="nav-menu">
-        {% for account in accounts %}
-        <tr>
-                <td>{{ account.name }}</td>
-                <td>
-                    {{ account.type }}
-                </td>
-        </tr>
+<div style="max-width: 700px; margin: 2rem auto;">
+    <h1 style="margin-bottom: 1rem;">Switch Account</h1>
+    <form action="/switch_account" method="post">
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            {% for account in accounts %}
+            <label style="display:flex; align-items:center; gap: .75rem; padding: .75rem; border: 1px solid var(--border); border-radius:8px;">
+                <input type="radio" name="account_id" value="{{ account.id }}" {% if account.id == current_account_id %}checked{% endif %}>
+                <div>
+                    <div style="font-weight:600;">{{ account.name }}</div>
+                    <div style="color:var(--text-secondary); font-size:.9rem;">{{ account.type }} — {{ account.balance|usd }}</div>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
 
-    </div>
-{% endblock %}
+        <div style="margin-top:1rem; display:flex; gap: .75rem;">
+            <button class="btn btn-primary" type="submit">Switch</button>
+            <a href="/settings" class="btn btn-secondary" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %} 

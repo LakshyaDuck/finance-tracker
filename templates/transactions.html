@@ -41,7 +41,7 @@
                     {% if transaction.type == 'personal' %}
                         {{ transaction.person_name }}
                     {% else %}
-                        {{ transaction.category_name }}
+                        {{ transaction.name }}
                     {% endif %}
                 </td>
                 <td>{{ transaction.description or '-' }}</td>

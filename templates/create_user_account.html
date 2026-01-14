@@ -1,40 +1,39 @@
 {% extends "layout.html" %}
 
-{% block title %}Create User Account{% endblock %}
-{% block nav_title %}Create User Account{% endblock %}
+{% block title %}Create Account{% endblock %}
+{% block nav_title %}Create Account{% endblock %}
 
 {% block main %}
 <div class="center-container">
     <div class="card account-card">
-        <h1 class="account-title">Create User Account</h1>
-        <p class="account-subtitle">Join Fortuna to manage your account</p>
+        <h1 class="account-title">Create Account</h1>
+        <p class="account-subtitle">Create a new account for your finances</p>
 
-        <form action="/create_user_account" method="post">
+        <form action="/create_account" method="post">
             <div class="form-group">
-                <label class="form-label" for="name">Name</label>
-                <input class="form-control" type="text" name="name" id="name" autocomplete="off" autofocus required>
+                <label class="form-label" for="account_name">Account Name</label>
+                <input class="form-control" type="text" name="account_name" id="account_name" autocomplete="off" required>
             </div>
 
             <div class="form-group">
-                <label class="form-label" for="password">Descirption</label>
-                <input class="form-control" type="text" name=descirption" id="descirption" required>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label" for="currency">Account</label>
-                <select class="form-control" name="type" id="type" required>
-                    <option value="emergency">Safe Account (For Emergency Funds)</option>
-                    <option value="savings">Savings Accounnt</option>
-                    <option value="current">Current Account</option>
-                    <option value="business">Business Account</option>
-                    <option value="investment">Investment Account</option>
+                <label class="form-label" for="account_type">Account Type</label>
+                <select class="form-control" name="account_type" id="account_type" required>
+                    <option value="current">Current</option>
+                    <option value="savings">Savings</option>
+                    <option value="safe">Safe</option>
+                    <option value="business">Business</option>
+                    <option value="investment">Investment</option>
                 </select>
             </div>
 
-            <button class="btn btn-primary btn-full" type="submit">Create Account</button>
+            <div class="form-group">
+                <label class="form-label" for="initial_balance">Initial Balance</label>
+                <input class="form-control" type="number" step="0.01" name="initial_balance" id="initial_balance" value="0">
+            </div>
 
-            <div class="divider-text">Want to Back</div>
-            <a href="/layout" class="btn btn-secondary btn-full">Back</a>
+            <button class="btn btn-primary btn-full" type="submit">Create Account</button>
+            <div class="divider-text">or</div>
+            <a href="/settings" class="btn btn-secondary btn-full">Back to Settings</a>
         </form>
     </div>
 </div>

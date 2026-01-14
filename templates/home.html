@@ -98,8 +98,8 @@
                     </div>
                     <div class="transaction-details">
                         <p class="transaction-title">
-                            {% if transaction.category_name %}
-                                {{ transaction.category_name }}
+                            {% if transaction.name %}
+                                {{ transaction.name }}
                             {% elif transaction.person_name %}
                                 {{ transaction.person_name }} ({{ transaction.direction }})
                             {% else %}
