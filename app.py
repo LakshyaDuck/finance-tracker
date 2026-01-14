@@ -967,11 +967,9 @@ def delete_category():
 # ====================
 # ANALYTICS ROUTE
 # ====================
-
 @app.route('/analytics')
 @login_required
 def analytics():
-    from datetime import datetime, timedelta
     from dateutil.relativedelta import relativedelta
 
     user_id = session["user_id"]
@@ -981,71 +979,67 @@ def analytics():
     twelve_months_ago = today - relativedelta(months=12)
 
     # 1. Income vs Expense by Month (last 12 months)
-    monthly_data = db.execute("""
-        SELECT
-            strftime('%Y-%m', date) as month,
-            SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
-            SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
-        FROM transactions
-        WHERE user_id = ? AND date >= ?
-        GROUP BY month
-        ORDER BY month ASC
-    """, user_id, twelve_months_ago.strftime("%Y-%m-%d"))
+    monthly_data = g.db.query(
+        func.strftime('%Y-%m', Transaction.date).label('month'),
+        func.sum(func.case((Transaction.type == 'income', Transaction.amount), else_=0)).label('income'),
+        func.sum(func.case((Transaction.type == 'expense', Transaction.amount), else_=0)).label('expense')
+    ).filter(
+        Transaction.user_id == user_id,
+        Transaction.date >= twelve_months_ago
+    ).group_by(func.strftime('%Y-%m', Transaction.date))\
+    .order_by(func.strftime('%Y-%m', Transaction.date)).all()
 
     # 2. Budget vs Actual Spending (current month)
     current_month = today.strftime("%Y-%m")
-    budget_data = db.execute("""
-        SELECT
-            c.name as category,
-            b.monthly_limit as budget,
-            COALESCE(SUM(t.amount), 0) as actual
-        FROM budgets b
-        JOIN categories c ON b.category_id = c.id
-        LEFT JOIN transactions t ON t.category_id = c.id
-            AND t.user_id = ?
-            AND strftime('%Y-%m', t.date) = ?
-            AND t.type = 'expense'
-        WHERE b.user_id = ? AND b.month = ?
-        GROUP BY c.name, b.monthly_limit
-        ORDER BY c.name
-    """, user_id, current_month, user_id, current_month)
+    budget_data = g.db.query(
+        Category.name.label('category'),
+        Budget.monthly_limit.label('budget'),
+        func.coalesce(func.sum(Transaction.amount), 0).label('actual')
+    ).select_from(Budget)\
+    .join(Category, Budget.category_id == Category.id)\
+    .outerjoin(
+        Transaction,
+        (Transaction.category_id == Category.id) &
+        (Transaction.user_id == user_id) &
+        (func.strftime('%Y-%m', Transaction.date) == current_month) &
+        (Transaction.type == 'expense')
+    ).filter(Budget.user_id == user_id, Budget.month == current_month)\
+    .group_by(Category.name, Budget.monthly_limit)\
+    .order_by(Category.name).all()
 
-    # 3. Account Balance Over Time (simulate with current balances)
-    # Note: For real timeline, you'd need to track balance history
-    account_balances = db.execute("""
-        SELECT name, balance, created_at
-        FROM accounts
-        WHERE user_id = ?
-        ORDER BY created_at
-    """, user_id)
+    # 3. Account Balance Over Time
+    account_balances = g.db.query(
+        Account.name,
+        Account.balance,
+        Account.created_at
+    ).filter_by(user_id=user_id)\
+    .order_by(Account.created_at).all()
 
     # 4. Income Sources Breakdown (last 12 months)
-    income_sources = db.execute("""
-        SELECT
-            c.name as category,
-            SUM(t.amount) as total
-        FROM transactions t
-        JOIN categories c ON t.category_id = c.id
-        WHERE t.user_id = ?
-            AND t.type = 'income'
-            AND t.date >= ?
-        GROUP BY c.name
-        ORDER BY total DESC
-    """, user_id, twelve_months_ago.strftime("%Y-%m-%d"))
+    income_sources = g.db.query(
+        Category.name.label('category'),
+        func.sum(Transaction.amount).label('total')
+    ).select_from(Transaction)\
+    .join(Category, Transaction.category_id == Category.id)\
+    .filter(
+        Transaction.user_id == user_id,
+        Transaction.type == 'income',
+        Transaction.date >= twelve_months_ago
+    ).group_by(Category.name)\
+    .order_by(func.sum(Transaction.amount).desc()).all()
 
-    # 5. Expense Categories Breakdown (for donut chart)
-    expense_breakdown = db.execute("""
-        SELECT
-            c.name as category,
-            SUM(t.amount) as total
-        FROM transactions t
-        JOIN categories c ON t.category_id = c.id
-        WHERE t.user_id = ?
-            AND t.type = 'expense'
-            AND t.date >= ?
-        GROUP BY c.name
-        ORDER BY total DESC
-    """, user_id, twelve_months_ago.strftime("%Y-%m-%d"))
+    # 5. Expense Categories Breakdown
+    expense_breakdown = g.db.query(
+        Category.name.label('category'),
+        func.sum(Transaction.amount).label('total')
+    ).select_from(Transaction)\
+    .join(Category, Transaction.category_id == Category.id)\
+    .filter(
+        Transaction.user_id == user_id,
+        Transaction.type == 'expense',
+        Transaction.date >= twelve_months_ago
+    ).group_by(Category.name)\
+    .order_by(func.sum(Transaction.amount).desc()).all()
 
     return render_template('analytics.html',
                          monthly_data=monthly_data,
