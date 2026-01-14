@@ -268,30 +268,41 @@ def home():
 # ====================
 # Create user account
 # ====================
-@app.route('/create_user_account', methods=["GET", "POST"])
+@app.route('/create_account', methods=["POST"])
 @login_required
-def create_user_account():
-    if request.method == 'GET':
-        return render_template('create_user_account.html')
+def create_account():
+    account_name = request.form.get('account_name')
+    account_type = request.form.get('account_type')
+    initial_balance = request.form.get('initial_balance')
 
-    if request.method == 'POST':
-        name = request.form.get('name')
-        type = request.form.get('type')
+    if not account_name or not account_type:
+        flash("Account name and type are required", "error")
+        return redirect("/settings")
 
-        if not name or not type:
-            return apology("Please enter the details", 400)
-        try:
-            account = Account(
-                user_id=session["user_id"],
-                name=name,
-                type=type
-            )
-            g.db.add(account)
-            g.db.commit()
-            return redirect('/')
-        except:
-            g.db.rollback()
-            return apology("Either name is same or type entered was invalid", 400)
+    # Validate account type
+    valid_types = ['current', 'savings', 'safe', 'business', 'investment']
+    if account_type not in valid_types:
+        flash("Invalid account type", "error")
+        return redirect("/settings")
+
+    try:
+        initial_balance = float(initial_balance) if initial_balance else 0
+
+        new_account = Account(
+            user_id=session["user_id"],
+            name=account_name,
+            type=account_type,
+            balance=initial_balance
+        )
+        g.db.add(new_account)
+        g.db.commit()
+
+        flash(f"Account '{account_name}' created successfully!", "success")
+    except Exception as e:
+        g.db.rollback()
+        flash("Failed to create account", "error")
+
+    return redirect("/settings")
 
 @app.route('/logout')
 @login_required
