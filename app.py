@@ -319,10 +319,14 @@ def add_transaction():
             Category.type == 'income'
         ).all()
 
+        today = date.today()
+
         return render_template('add_transaction.html',
                              accounts=accounts,
                              expense_categories=expense_categories,
-                             income_categories=income_categories)
+                             income_categories=income_categories,
+                             today=today
+                        )
 
     if request.method == 'POST':
         amount = request.form.get('amount')
