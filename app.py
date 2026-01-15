@@ -192,7 +192,7 @@ def home():
             account_id == account_id,
             Transaction.type == "income",
             func.strftimr("Y%-m%", Transaction.date == current_month)
-        ).scaler()
+        ).scalar()
 
     # Get this month's expenses for THIS account only
     expense = g.db.query(func.coalesce(func.sum(Transaction.amount, 0)))\
