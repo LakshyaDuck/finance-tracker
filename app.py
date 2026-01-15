@@ -311,11 +311,18 @@ def transactions():
 def add_transaction():
     if request.method == 'GET':
         # Get user's accounts
-        accounts = db.execute("SELECT id, name, type, balance FROM accounts WHERE user_id = ?", session["user_id"])
+        accounts = g.db.query(Account).filter_by(user_id=session["user_id"]).all()
 
         # Get categories for dropdown
-        expense_categories = db.execute("SELECT * FROM categories WHERE type = 'expense' AND (user_id = ? OR user_id IS NULL)", session["user_id"])
-        income_categories = db.execute("SELECT * FROM categories WHERE type = 'income' AND (user_id = ? OR user_id IS NULL)", session["user_id"])
+        expense_categories = g.db.query(Category).filter(
+            (Category.user_id == session["user_id"]) | (Category.user_id == None),
+            Category.type == 'expense'
+        ).all()
+        
+        income_categories = g.db.query(Category).filter(
+            (Category.user_id == session["user_id"]) | (Category.user_id == None),
+            Category.type == 'income'
+        ).all()
 
         return render_template('add_transaction.html',
                              accounts=accounts,
@@ -346,50 +353,74 @@ def add_transaction():
                 return apology("Cannot transfer to the same account", 400)
 
             # Verify both accounts belong to user
-            from_account = db.execute("SELECT * FROM accounts WHERE id = ? AND user_id = ?", from_account_id, session["user_id"])
-            to_account = db.execute("SELECT * FROM accounts WHERE id = ? AND user_id = ?", to_account_id, session["user_id"])
+            from_account = g.db.query(Account).filter_by(
+                id=from_account_id,
+                user_id=session["user_id"]
+            ).first()
+            
+            to_account = g.db.query(Account).filter_by(
+                id=to_account_id,
+                user_id=session["user_id"]
+            ).first()
 
             if not from_account or not to_account:
                 return apology("Invalid accounts", 400)
 
             # Check sufficient balance
-            if from_account[0]["balance"] < amount:
+            if from_account.balance < amount:
                 return apology("Insufficient balance in source account", 400)
 
             try:
                 # 1. Create transfer record in transfers table
-                db.execute("""
-                    INSERT INTO transfers (user_id, from_account_id, to_account_id, amount, date, description)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, session["user_id"], from_account_id, to_account_id, amount, trans_date, description)
+                new_transfer = Transfer(
+                    user_id=session["user_id"],
+                    from_account_id=from_account_id,
+                    to_account_id=to_account_id,
+                    amount=amount,
+                    date=trans_date,
+                    description=description
+                )
+                g.db.add(new_transfer)
 
                 # 2. Update account balances
-                db.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", amount, from_account_id)
-                db.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", amount, to_account_id)
+                from_account.balance -= amount
+                to_account.balance += amount
 
                 # 3. Create two transaction records for display in transaction history
                 # Outgoing transaction (from source account)
-                db.execute("""
-                    INSERT INTO transactions
-                    (user_id, account_id, category_id, amount, description, date, type, person_name, direction)
-                    VALUES (?, ?, NULL, ?, ?, ?, 'expense', ?, NULL)
-                """, session["user_id"], from_account_id, amount,
-                     f"Transfer to {to_account[0]['name']}" + (f" - {description}" if description else ""),
-                     trans_date, to_account[0]['name'])
+                outgoing_transaction = Transaction(
+                    user_id=session["user_id"],
+                    account_id=from_account_id,
+                    category_id=None,
+                    amount=amount,
+                    description=f"Transfer to {to_account.name}" + (f" - {description}" if description else ""),
+                    date=trans_date,
+                    type='expense',
+                    person_name=to_account.name,
+                    direction=None
+                )
+                g.db.add(outgoing_transaction)
 
                 # Incoming transaction (to destination account)
-                db.execute("""
-                    INSERT INTO transactions
-                    (user_id, account_id, category_id, amount, description, date, type, person_name, direction)
-                    VALUES (?, ?, NULL, ?, ?, ?, 'income', ?, NULL)
-                """, session["user_id"], to_account_id, amount,
-                     f"Transfer from {from_account[0]['name']}" + (f" - {description}" if description else ""),
-                     trans_date, from_account[0]['name'])
+                incoming_transaction = Transaction(
+                    user_id=session["user_id"],
+                    account_id=to_account_id,
+                    category_id=None,
+                    amount=amount,
+                    description=f"Transfer from {from_account.name}" + (f" - {description}" if description else ""),
+                    date=trans_date,
+                    type='income',
+                    person_name=from_account.name,
+                    direction=None
+                )
+                g.db.add(incoming_transaction)
 
-                flash(f"Transferred {amount} from {from_account[0]['name']} to {to_account[0]['name']}", "success")
+                g.db.commit()
+                flash(f"Transferred {amount} from {from_account.name} to {to_account.name}", "success")
                 return redirect("/transactions")
 
             except Exception as e:
+                g.db.rollback()
                 print(f"Transfer error: {e}")
                 return apology("Transfer failed", 400)
 
@@ -400,7 +431,11 @@ def add_transaction():
             return apology("Please select an account", 400)
 
         # Validate account belongs to user
-        account = db.execute("SELECT * FROM accounts WHERE id = ? AND user_id = ?", account_id, session["user_id"])
+        account = g.db.query(Account).filter_by(
+            id=account_id,
+            user_id=session["user_id"]
+        ).first()
+        
         if not account:
             return apology("Invalid account", 400)
 
@@ -413,18 +448,28 @@ def add_transaction():
                 return apology("Please enter person name and direction", 400)
 
             try:
-                db.execute("""INSERT INTO transactions
-                           (user_id, account_id, category_id, amount, description, date, type, person_name, direction)
-                           VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)""",
-                           session['user_id'], account_id, amount, description, trans_date, trans_type, person_name, direction)
+                new_transaction = Transaction(
+                    user_id=session['user_id'],
+                    account_id=account_id,
+                    category_id=None,
+                    amount=amount,
+                    description=description,
+                    date=trans_date,
+                    type=trans_type,
+                    person_name=person_name,
+                    direction=direction
+                )
+                g.db.add(new_transaction)
 
                 if direction == "lent":
-                    db.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", amount, account_id)
+                    account.balance -= amount
                 else:  # borrowed
-                    db.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", amount, account_id)
+                    account.balance += amount
 
+                g.db.commit()
                 return redirect("/transactions")
             except Exception as e:
+                g.db.rollback()
                 print(f"Error: {e}")
                 return apology("Something went wrong", 400)
 
@@ -434,28 +479,37 @@ def add_transaction():
             if not category_name:
                 return apology("Please select a category", 400)
 
-            category = db.execute("SELECT id FROM categories WHERE name = ?", category_name)
+            category = g.db.query(Category).filter_by(name=category_name).first()
             if not category:
                 return apology("Invalid category", 400)
 
-            category_id = category[0]["id"]
+            category_id = category.id
 
             try:
-                db.execute("""INSERT INTO transactions
-                           (user_id, account_id, category_id, amount, description, date, type, person_name, direction)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)""",
-                           session['user_id'], account_id, category_id, amount, description, trans_date, trans_type)
+                new_transaction = Transaction(
+                    user_id=session['user_id'],
+                    account_id=account_id,
+                    category_id=category_id,
+                    amount=amount,
+                    description=description,
+                    date=trans_date,
+                    type=trans_type,
+                    person_name=None,
+                    direction=None
+                )
+                g.db.add(new_transaction)
 
                 if trans_type == "income":
-                    db.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", amount, account_id)
+                    account.balance += amount
                 elif trans_type == "expense":
-                    db.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", amount, account_id)
+                    account.balance -= amount
 
+                g.db.commit()
                 return redirect("/transactions")
             except Exception as e:
+                g.db.rollback()
                 print(f"Error: {e}")
                 return apology("Something went wrong", 400)
-
 
 # ====================
 # Delete transactions
@@ -564,36 +618,36 @@ def budgets():
 
         if not category_id or not monthly_limit:
             return apology("Please provide all fields", 400)
-monthly_income = g.db.query(
-    func.coalesce(func.sum(Transaction.amount), 0)
-).filter(
-    Transaction.user_id == user_id,
-    Transaction.account_id == account_id,
-    Transaction.type == 'income',
-    func.strftime('%Y-%m', Transaction.date) == current_month
-).scalar()
+    monthly_income = g.db.query(
+        func.coalesce(func.sum(Transaction.amount), 0)
+    ).filter(
+        Transaction.user_id == session["user_id"],
+        Transaction.account_id == session["account_id"],
+        Transaction.type == 'income',
+        func.strftime('%Y-%m', Transaction.date) == current_month
+    ).scalar()
         # Check if budget already exists
-        existing_budget = g.db.query(Budget).filter_by(
+    existing_budget = g.db.query(Budget).filter_by(
             user_id=session['user_id'],
             category_id=category_id,
             month=current_month
         ).first()
 
-        if not existing_budget:
-            # Insert new budget
-            new_budget = Budget(
+    if not existing_budget:
+        # Insert new budget
+        new_budget = Budget(
                 user_id=session['user_id'],
                 category_id=category_id,
                 monthly_limit=monthly_limit,
                 month=current_month
             )
-            g.db.add(new_budget)
-        else:
-            # Update existing budget
-            existing_budget.monthly_limit = monthly_limit
+        g.db.add(new_budget)
+    else:
+        # Update existing budget
+        existing_budget.monthly_limit = monthly_limit
 
-        g.db.commit()
-        return redirect('/budgets')
+    g.db.commit()
+    return redirect('/budgets')
 
 # ====================
 # Settings
@@ -691,11 +745,12 @@ def create_account():
 
     try:
         initial_balance = float(initial_balance) if initial_balance else 0
-
-        db.execute("""
-            INSERT INTO accounts (user_id, name, type, balance)
-            VALUES (?, ?, ?, ?)
-        """, session["user_id"], account_name, account_type, initial_balance)
+        account = Account(
+            user_id=session["user_id"],
+            name=account_name,
+            type=account_type,
+            balance=initial_balance
+        )
 
         flash(f"Account '{account_name}' created successfully!", "success")
     except Exception as e:
