@@ -242,12 +242,6 @@ def home():
     )\
     .select_from(Transaction)\
     .join(Category, Transaction.category_id == Category.id)\
-    .outer_join(
-        Transaction,
-        (Transaction.category_id == Category.id) &
-        (Transaction.user_id == user_id) &
-        (func.strftime('%Y-%m', Transaction.date) == current_month)
-    )\
     .filter(Budget.user_id == user_id)\
     .order_by(Transaction.date.desc(), Transaction.id.desc())\
     .limit(8)\
