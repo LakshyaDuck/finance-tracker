@@ -186,25 +186,26 @@ def home():
     account_name = account.name
     account_type = account.type
     # Get this month's income for THIS account only
-    income = g.db.query(func.sum(Transaction.amount, 0))\
-        .filter(
-            Transaction.user_id == user_id,
-            account_id == account_id,
-            Transaction.type == "income",
-            func.strftimr("Y%-m%", Transaction.date == current_month)
-        ).scalar()
+    monthly_income = g.db.query(
+        func.coalesce(func.sum(Transaction.amount), 0)
+    ).filter(
+        Transaction.user_id == user_id,
+        Transaction.account_id == account_id,
+        Transaction.type == 'income',
+        func.strftime('%Y-%m', Transaction.date) == current_month
+    ).scalar()
 
     # Get this month's expenses for THIS account only
-    expense = g.db.query(func.coalesce(func.sum(Transaction.amount, 0)))\
-        .filter(
-            Transaction.user_id == user_id,
-            account_id == account_id,
-            type == "expense",
-            func.strftimr("Y%-m%", Transaction.date == current_month)
-        ).scalar()
-
+    monthly_expense = g.db.query(
+        func.coalesce(func.sum(Transaction.amount), 0)
+    ).filter(
+        Transaction.user_id == user_id,
+        Transaction.account_id == account_id,
+        Transaction.type == 'expense',
+        func.strftime('%Y-%m', Transaction.date) == current_month
+    ).scalar()
     # Calculate monthly net
-    monthly_net = income - expense
+    monthly_net = monthly_income - monthly_expense
 
     # Get budget alerts (spending across ALL accounts)
     budget_alerts = g.db.query(
@@ -256,8 +257,8 @@ def home():
                          account_balance=account_balance,
                          account_name=account_name,
                          account_type=account_type,
-                         monthly_income=income,
-                         monthly_expenses=expense,
+                         monthly_income=monthly_income,
+                         monthly_expenses=monthly_expense,
                          monthly_net=monthly_net,
                          budget_alerts=budget_alerts,
                          recent_transactions=recent_transactions)
