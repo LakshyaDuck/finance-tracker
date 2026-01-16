@@ -1,11 +1,11 @@
-from flask import Flask, flash, redirect, render_template, request, session, g
+from flask import Flask, flash, redirect, render_template, request, session, g, jsonify
 from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import date
 from sqlalchemy import select, func
 from database import init_db, get_db, close_db
 from models import User, Account, Transaction, Category, Budget, Transfer
-from helpers import apology, login_required, usd
+from helpers import apology, login_required, usd, convert_date_to_sqlite
 from dotenv import load_dotenv
 import os
 
@@ -333,6 +333,7 @@ def add_transaction():
         description = request.form.get('description')
         trans_date = request.form.get('date')
         trans_type = request.form.get('type')
+        trans_date = convert_date_to_sqlite(trans_date)
 
         if not amount or not trans_date or not trans_type:
             return apology("Please enter all essential details", 400)
