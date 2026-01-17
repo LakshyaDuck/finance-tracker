@@ -64,7 +64,7 @@ class Transaction(Base):
     category_id = Column(Integer, ForeignKey('categories.id'), nullable=True)
     amount = Column(Float, nullable=False)
     description = Column(String, nullable=True)
-    date = Column(Date, nullable=False)
+    date = Column(Date, default=date.today, nullable=False)
     type = Column(String, nullable=False)
     person_name = Column(String, nullable=True)
     direction = Column(String, nullable=True)

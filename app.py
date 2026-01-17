@@ -333,7 +333,6 @@ def add_transaction():
         description = request.form.get('description')
         trans_date = request.form.get('date')
         trans_type = request.form.get('type')
-        trans_date = convert_date_to_sqlite(trans_date)
 
         if not amount or not trans_date or not trans_type:
             return apology("Please enter all essential details", 400)
@@ -377,7 +376,7 @@ def add_transaction():
                     from_account_id=from_account_id,
                     to_account_id=to_account_id,
                     amount=amount,
-                    date=trans_date,
+                #    date=trans_date,
                     description=description
                 )
                 g.db.add(new_transfer)
@@ -394,7 +393,7 @@ def add_transaction():
                     category_id=None,
                     amount=amount,
                     description=f"Transfer to {to_account.name}" + (f" - {description}" if description else ""),
-                    date=trans_date,
+                #    date=trans_date,
                     type='expense',
                     person_name=to_account.name,
                     direction=None
@@ -408,7 +407,7 @@ def add_transaction():
                     category_id=None,
                     amount=amount,
                     description=f"Transfer from {from_account.name}" + (f" - {description}" if description else ""),
-                    date=trans_date,
+                #    date=trans_date,
                     type='income',
                     person_name=from_account.name,
                     direction=None
@@ -454,7 +453,7 @@ def add_transaction():
                     category_id=None,
                     amount=amount,
                     description=description,
-                    date=trans_date,
+                #    date=trans_date,
                     type=trans_type,
                     person_name=person_name,
                     direction=direction
@@ -492,7 +491,7 @@ def add_transaction():
                     category_id=category_id,
                     amount=amount,
                     description=description,
-                    date=trans_date,
+                #    date=trans_date,
                     type=trans_type,
                     person_name=None,
                     direction=None
