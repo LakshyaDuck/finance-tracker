@@ -17,6 +17,14 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = False
+app.config["SESSION_REFRESH_EACH_REQUEST"] = True
+
+@app.before_request
+def before_request():
+    g.db = get_db()
+    g.theme = session.get('theme', 'light')
 
 app.jinja_env.filters["usd"] = usd
 

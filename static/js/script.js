@@ -103,6 +103,17 @@ function formatCurrency(amount, currency = 'USD') {
     }).format(amount);
 }
 
+document.addEventListener('DOMContentLoaded', function() {
+    const navToggle = document.getElementById('navToggle');
+    const navMenu = document.getElementById('navMenu');
+    
+    if (navToggle) {
+        navToggle.addEventListener('click', function() {
+            navToggle.classList.toggle('active');
+            navMenu.classList.toggle('active');
+        });
+    }
+});
 // Console log for debugging (remove in production)
 // ==========================================
 

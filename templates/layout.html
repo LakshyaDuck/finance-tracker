@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <script>
-        {% if session.get('theme') == 'dark' %}
+        {% if g.theme == 'dark' %}
         document.documentElement.setAttribute('data-theme', 'dark');
         {% endif %}
     </script>
@@ -10,7 +10,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{% endblock %} - Fortuna</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <nav class="navbar">
@@ -41,6 +41,6 @@
         {% block main %}{% endblock %}
     </main>
 
-    <script src="/static/script.js"></script>
+    <script src="/static/js/script.js"></script>
 </body>
 </html>

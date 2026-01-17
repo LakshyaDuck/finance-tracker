@@ -193,6 +193,11 @@ nav {
     padding: 1rem 0;
 }
 
+/* Hide mobile menu button on desktop */
+.navbar-toggler {
+    display: none;
+}
+
 .nav-container {
     max-width: 1200px;
     margin: 0 auto;
@@ -310,4 +315,16 @@ tr:hover {
     }
     h1 { font-size: 1.5rem; }
     h2 { font-size: 1.25rem; }
+}
+
+/* Show it only on small screens */
+@media (max-width: 768px) {
+    .navbar-toggler {
+        display: block;
+    }
+    
+    /* Stack nav items vertically on mobile */
+    .navbar-nav {
+        flex-direction: column;
+    }
 }
