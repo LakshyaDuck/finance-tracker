@@ -106,7 +106,7 @@ class Transfer(Base):
     from_account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False)
     to_account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False)
     amount = Column(Float, nullable=False)
-    date = Column(Date, nullable=False)
+    date = Column(Date, default=date.today(), nullable=False)
     description = Column(String, nullable=True)
     
     __table_args__ = (

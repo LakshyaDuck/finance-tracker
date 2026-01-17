@@ -21,5 +21,5 @@ def usd(value):
     """Format value as USD."""
     return f"${value:,.2f}"
 
-def convert_date_to_sqlite(date_obj):
-    return str(date_obj).split(' ')[0]
+def row_to_dict(row):
+    return dict(row._mapping) if hasattr(row, '_mapping') else row

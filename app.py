@@ -1,11 +1,11 @@
-from flask import Flask, flash, redirect, render_template, request, session, g, jsonify
+from flask import Flask, flash, redirect, render_template, request, session, g
 from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import date
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from database import init_db, get_db, close_db
 from models import User, Account, Transaction, Category, Budget, Transfer
-from helpers import apology, login_required, usd, convert_date_to_sqlite
+from helpers import apology, login_required, usd, row_to_dict
 from dotenv import load_dotenv
 import os
 
@@ -272,28 +272,22 @@ def logout():
 @app.route('/transactions')
 @login_required
 def transactions():
-    # Join with categories to get category names
     user_id = session["user_id"]
+    
     transactions = g.db.query(
-        Transaction.id.label("id"),
-        Transaction.amount.label("amount"),
-        Transaction.description.label("description"),
-        Transaction.date.label("date"),
-        Transaction.type.label("type"),
-        Transaction.person_name.label("person_name"),
-        Transaction.direction.label("direction"),
-        Category.name.label("name")
-        )\
-        .select_from(Budget)\
-        .join(Category, Transaction.category_id == Category.id)\
-        .outerjoin(
-            Transaction,
-            (Transaction.category_id == Category.id) &
-            (Transaction.user_id == user_id)
-        )\
-        .filter(Transaction.user_id == user_id)\
-        .order_by(Transaction.date.desc())\
-        .all()
+        Transaction.id,
+        Transaction.amount,
+        Transaction.description,
+        Transaction.date,
+        Transaction.type,
+        Transaction.person_name,
+        Transaction.direction,
+        Category.name
+    )\
+    .outerjoin(Category, Transaction.category_id == Category.id)\
+    .filter(Transaction.user_id == user_id)\
+    .order_by(Transaction.date.desc())\
+    .all()
 
     return render_template('transactions.html', transactions=transactions)
 
@@ -331,10 +325,9 @@ def add_transaction():
     if request.method == 'POST':
         amount = request.form.get('amount')
         description = request.form.get('description')
-        trans_date = request.form.get('date')
         trans_type = request.form.get('type')
 
-        if not amount or not trans_date or not trans_type:
+        if not amount or not trans_type:
             return apology("Please enter all essential details", 400)
 
         # Convert amount to float
@@ -376,7 +369,6 @@ def add_transaction():
                     from_account_id=from_account_id,
                     to_account_id=to_account_id,
                     amount=amount,
-                #    date=trans_date,
                     description=description
                 )
                 g.db.add(new_transfer)
@@ -393,7 +385,6 @@ def add_transaction():
                     category_id=None,
                     amount=amount,
                     description=f"Transfer to {to_account.name}" + (f" - {description}" if description else ""),
-                #    date=trans_date,
                     type='expense',
                     person_name=to_account.name,
                     direction=None
@@ -407,7 +398,6 @@ def add_transaction():
                     category_id=None,
                     amount=amount,
                     description=f"Transfer from {from_account.name}" + (f" - {description}" if description else ""),
-                #    date=trans_date,
                     type='income',
                     person_name=from_account.name,
                     direction=None
@@ -453,7 +443,6 @@ def add_transaction():
                     category_id=None,
                     amount=amount,
                     description=description,
-                #    date=trans_date,
                     type=trans_type,
                     person_name=person_name,
                     direction=direction
@@ -491,7 +480,6 @@ def add_transaction():
                     category_id=category_id,
                     amount=amount,
                     description=description,
-                #    date=trans_date,
                     type=trans_type,
                     person_name=None,
                     direction=None
@@ -538,23 +526,23 @@ def delete_transaction():
         if trans_type == "income":
             # Subtrat the money if income
             g.db.query(Account)\
-                .filter_by(account_id=account_id)\
+                .filter_by(id=account_id)\
                 .update({"balance": Account.balance - amount})
         elif trans_type == "expense":
             # Add the money if expense
             g.db.query(Account)\
-                .filter_by(account_id=account_id)\
+                .filter_by(id=account_id)\
                 .update({"balance": Account.balance + amount})
         elif trans_type == "personal":
             if direction == "lent":
                 # Add if lent
                 g.db.query(Account)\
-                    .filter_by(account_id=account_id)\
+                    .filter_by(id=account_id)\
                     .update({"balance": Account.balance + amount})
             elif direction == "borrowed":
                 # Subtract if borrowed
                 g.db.query(Account)\
-                    .filter_by(account_id=account_id)\
+                    .filter_by(id=account_id)\
                     .update({"balance": Account.balance - amount})
                 
         # Delete the transaction
@@ -562,8 +550,9 @@ def delete_transaction():
             .filter_by(id=transaction_id)\
             .delete()
         g.db.commit()
-    except:
+    except Exception as e:
         g.db.rollback()
+        print(f"Delete transaction error: {e}")
         return apology("Could not delete transaction", 400)
 
     return redirect("/transactions")
@@ -751,6 +740,8 @@ def create_account():
             balance=initial_balance
         )
 
+        g.db.add(account)
+        g.db.commit()
         flash(f"Account '{account_name}' created successfully!", "success")
     except Exception as e:
         flash("Failed to create account", "error")
@@ -992,80 +983,83 @@ def delete_category():
 @app.route('/analytics')
 @login_required
 def analytics():
-    from dateutil.relativedelta import relativedelta
+    try:
+        from dateutil.relativedelta import relativedelta
 
-    user_id = session["user_id"]
+        user_id = session["user_id"]
+        today = date.today()
+        twelve_months_ago = today - relativedelta(months=12)
 
-    # Get last 12 months
-    today = date.today()
-    twelve_months_ago = today - relativedelta(months=12)
+        # 1. Income vs Expense by Month
+        monthly_data = g.db.query(
+            func.strftime('%Y-%m', Transaction.date).label('month'),
+            func.sum(case((Transaction.type == 'income', Transaction.amount), else_=0)).label('income'),
+            func.sum(case((Transaction.type == 'expense', Transaction.amount), else_=0)).label('expense')
+        ).filter(
+            Transaction.user_id == user_id,
+            Transaction.date >= twelve_months_ago
+        ).group_by(func.strftime('%Y-%m', Transaction.date))\
+        .order_by(func.strftime('%Y-%m', Transaction.date)).all()
 
-    # 1. Income vs Expense by Month (last 12 months)
-    monthly_data = g.db.query(
-        func.strftime('%Y-%m', Transaction.date).label('month'),
-        func.sum(func.case((Transaction.type == 'income', Transaction.amount), else_=0)).label('income'),
-        func.sum(func.case((Transaction.type == 'expense', Transaction.amount), else_=0)).label('expense')
-    ).filter(
-        Transaction.user_id == user_id,
-        Transaction.date >= twelve_months_ago
-    ).group_by(func.strftime('%Y-%m', Transaction.date))\
-    .order_by(func.strftime('%Y-%m', Transaction.date)).all()
+        # 2. Budget vs Actual Spending
+        current_month = today.strftime("%Y-%m")
+        budget_data = g.db.query(
+            Category.name.label('category'),
+            Budget.monthly_limit.label('budget'),
+            func.coalesce(func.sum(Transaction.amount), 0).label('actual')
+        ).select_from(Budget)\
+        .join(Category, Budget.category_id == Category.id)\
+        .outerjoin(
+            Transaction,
+            (Transaction.category_id == Category.id) &
+            (Transaction.user_id == user_id) &
+            (func.strftime('%Y-%m', Transaction.date) == current_month) &
+            (Transaction.type == 'expense')
+        ).filter(Budget.user_id == user_id, Budget.month == current_month)\
+        .group_by(Category.name, Budget.monthly_limit)\
+        .order_by(Category.name).all()
 
-    # 2. Budget vs Actual Spending (current month)
-    current_month = today.strftime("%Y-%m")
-    budget_data = g.db.query(
-        Category.name.label('category'),
-        Budget.monthly_limit.label('budget'),
-        func.coalesce(func.sum(Transaction.amount), 0).label('actual')
-    ).select_from(Budget)\
-    .join(Category, Budget.category_id == Category.id)\
-    .outerjoin(
-        Transaction,
-        (Transaction.category_id == Category.id) &
-        (Transaction.user_id == user_id) &
-        (func.strftime('%Y-%m', Transaction.date) == current_month) &
-        (Transaction.type == 'expense')
-    ).filter(Budget.user_id == user_id, Budget.month == current_month)\
-    .group_by(Category.name, Budget.monthly_limit)\
-    .order_by(Category.name).all()
+        # 3. Account Balance Over Time
+        account_balances = g.db.query(
+            Account.name,
+            Account.balance,
+            Account.created_at
+        ).filter_by(user_id=user_id)\
+        .order_by(Account.created_at).all()
 
-    # 3. Account Balance Over Time
-    account_balances = g.db.query(
-        Account.name,
-        Account.balance,
-        Account.created_at
-    ).filter_by(user_id=user_id)\
-    .order_by(Account.created_at).all()
+        # 4. Income Sources Breakdown
+        income_sources = g.db.query(
+            Category.name.label('category'),
+            func.sum(Transaction.amount).label('total')
+        ).select_from(Transaction)\
+        .join(Category, Transaction.category_id == Category.id)\
+        .filter(
+            Transaction.user_id == user_id,
+            Transaction.type == 'income',
+            Transaction.date >= twelve_months_ago
+        ).group_by(Category.name)\
+        .order_by(func.sum(Transaction.amount).desc()).all()
 
-    # 4. Income Sources Breakdown (last 12 months)
-    income_sources = g.db.query(
-        Category.name.label('category'),
-        func.sum(Transaction.amount).label('total')
-    ).select_from(Transaction)\
-    .join(Category, Transaction.category_id == Category.id)\
-    .filter(
-        Transaction.user_id == user_id,
-        Transaction.type == 'income',
-        Transaction.date >= twelve_months_ago
-    ).group_by(Category.name)\
-    .order_by(func.sum(Transaction.amount).desc()).all()
+        # 5. Expense Categories Breakdown
+        expense_breakdown = g.db.query(
+            Category.name.label('category'),
+            func.sum(Transaction.amount).label('total')
+        ).select_from(Transaction)\
+        .join(Category, Transaction.category_id == Category.id)\
+        .filter(
+            Transaction.user_id == user_id,
+            Transaction.type == 'expense',
+            Transaction.date >= twelve_months_ago
+        ).group_by(Category.name)\
+        .order_by(func.sum(Transaction.amount).desc()).all()
 
-    # 5. Expense Categories Breakdown
-    expense_breakdown = g.db.query(
-        Category.name.label('category'),
-        func.sum(Transaction.amount).label('total')
-    ).select_from(Transaction)\
-    .join(Category, Transaction.category_id == Category.id)\
-    .filter(
-        Transaction.user_id == user_id,
-        Transaction.type == 'expense',
-        Transaction.date >= twelve_months_ago
-    ).group_by(Category.name)\
-    .order_by(func.sum(Transaction.amount).desc()).all()
-
-    return render_template('analytics.html',
-                         monthly_data=monthly_data,
-                         budget_data=budget_data,
-                         account_balances=account_balances,
-                         income_sources=income_sources,
-                         expense_breakdown=expense_breakdown)
+        return render_template('analytics.html',
+            monthly_data=[row_to_dict(r) for r in monthly_data],
+            budget_data=[row_to_dict(r) for r in budget_data],
+            account_balances=[row_to_dict(r) for r in account_balances],
+            income_sources=[row_to_dict(r) for r in income_sources],
+            expense_breakdown=[row_to_dict(r) for r in expense_breakdown]
+        )
+    except Exception as e:
+        print(f"Analytics error: {e}")
+        return apology("Could not load analytics", 400)
